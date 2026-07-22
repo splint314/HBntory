@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HBntory — Backoffice</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header>
+  <h1>HBntory Backoffice</h1>
+  <div id="user-info" class="hidden">
+    <span id="user-label"></span>
+    <button id="logout-btn">Se déconnecter</button>
+  </div>
+</header>
+
+<main>
+
+  <section id="login-view">
+    <h2>Connexion</h2>
+    <form id="login-form">
+      <label>Nom d'utilisateur
+        <input type="text" id="login-username" autocomplete="username" required>
+      </label>
+      <label>Mot de passe
+        <input type="password" id="login-password" autocomplete="current-password" required>
+      </label>
+      <button type="submit">Se connecter</button>
+    </form>
+    <p id="login-error" class="error"></p>
+  </section>
+
+  <section id="common-view" class="hidden">
+    <div id="branch-banner" class="banner"></div>
+
+    <h2>Stock de ma branche</h2>
+    <table id="stock-table">
+      <thead><tr><th>SKU</th><th>Produit</th><th>Quantité</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p id="stock-empty" class="hidden">Aucun produit en stock pour cette branche.</p>
+
+    <h3>Vérifier la quantité d'un produit</h3>
+    <form id="check-form">
+      <label>SKU <input type="text" id="check-sku" placeholder="ex. HB-LAP-1001" required></label>
+      <button type="submit">Vérifier</button>
+    </form>
+    <p id="check-result"></p>
+
+    <h3>Ajouter / retirer du stock</h3>
+    <p class="hint">
+      Les produits proviennent du catalogue de l'API Produit externe
+      (nom, description, prix) ; seule la quantité est stockée ici, pour
+      votre branche uniquement.
+    </p>
+    <form id="stock-form">
+      <label>Produit
+        <select id="stock-product" required></select>
+      </label>
+      <label>Quantité <input type="number" id="stock-quantity" min="1" step="1" required></label>
+      <div class="button-row">
+        <button type="button" id="stock-add-btn">Ajouter</button>
+        <button type="button" id="stock-remove-btn" class="secondary">Retirer</button>
+      </div>
+    </form>
+    <p id="stock-message"></p>
+  </section>
+
+  <section id="admin-view" class="hidden">
+    <h2>Utilisateurs</h2>
+    <table id="users-table">
+      <thead>
+        <tr><th>Utilisateur</th><th>Rôle</th><th>Branche</th><th>Actif</th><th>Actions</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <p id="admin-message"></p>
+
+    <h3>Créer un utilisateur commun</h3>
+    <form id="create-user-form">
+      <label>Nom d'utilisateur <input type="text" id="new-username" required></label>
+      <label>Mot de passe <input type="password" id="new-password" minlength="8" required></label>
+      <label>Branche <select id="new-branch" required></select></label>
+      <button type="submit">Créer</button>
+    </form>
+    <p id="create-user-message"></p>
+  </section>
+
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
