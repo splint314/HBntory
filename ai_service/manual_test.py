@@ -49,8 +49,9 @@ EXAMPLE_QUESTIONS = [
     "Quels sont les détails du produit HB-LAP-1001 ?",
     "Quelles branches ont du stock du produit HB-KBD-4102 ?",
     "Quels produits sont disponibles dans la branche Lyon ?",
-    "Je veux équiper un poste de travail complet, que recommandes-tu ?",
+    "J'ai besoin de 5 claviers HB-KBD-4102, une branche peut-elle fournir cette quantité ?",
     "As-tu du stock pour un produit qui n'existe pas, XYZ-0000 ?",
+    "Quelle est la météo à Paris aujourd'hui ?",  # out of scope, should be declined
 ]
 
 

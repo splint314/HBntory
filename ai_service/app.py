@@ -10,6 +10,7 @@ served from a different origin.
 """
 
 import asyncio
+import logging
 import os
 
 from flask import Flask, jsonify, request
@@ -54,5 +55,9 @@ def ask():
 
 
 if __name__ == "__main__":
+    # INFO-level logs from agent.py ("hbntory.agent") show every tool call
+    # the agent makes and its result — see ai_service/README.md "Observing
+    # tool calls" for how to use this while debugging.
+    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
     port = int(os.getenv("AI_SERVICE_PORT", "5002"))
     app.run(host="0.0.0.0", port=port)

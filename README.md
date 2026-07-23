@@ -1,23 +1,63 @@
 # HBntory
 
 Système de gestion de stock multi-branches pour une entreprise de vente au
-détail fictive (projet Holberton).
+détail fictive (projet Holberton), avec un agent IA capable de répondre à
+des questions sur le catalogue produit et la disponibilité en stock.
 
-Voir [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
-pour l'architecture complète du système (services, flux de données,
-stratégies de communication, MVP).
+## Équipe
 
-## État du projet
+- Kevin Rigal — krigal323@gmail.com
+- Panaki Gillot — gillotpanaki@gmail.com
 
-| Composant | État |
-|---|---|
-| `backoffice/` | Task 0-3 : modèles, base de données, API REST, authentification/autorisation, interface web (stock + gestion utilisateurs) |
-| `product_api/` | API Produit externe fournie (vendored depuis [hbntory-products-api](https://github.com/hbtn-edu/hbntory-products-api)), lecture seule, non modifiée |
-| `product_mcp/` | Task 4-5 : serveur MCP Produit + Stock (`list_products_tool`, `get_product_details`, `list_branches_tool`, `get_stock_by_branch_tool`, `get_branches_with_product_tool`) |
-| `ai_service/` | Task 5 : Service IA (agent Claude en tool-use sur le serveur MCP), API REST `/api/ask` |
-| `client_web/` | Task 6 : interface cliente publique (page statique, sans authentification) |
+## Vue d'ensemble du projet
 
-## Tout lancer avec Docker Compose
+Le système est composé de six services indépendants (voir
+[docs/architecture_and_planning.md](docs/architecture_and_planning.md) pour
+le détail complet — architecture, flux de données, stratégies de
+communication, MVP) :
+
+| Service | Rôle | État |
+|---|---|---|
+| `backoffice/` | API REST + interface web interne : gestion des utilisateurs (admin) et du stock (utilisateurs communs) | Task 0-3, fait |
+| `product_api/` | Catalogue fournisseur externe, vendored, lecture seule, non modifié | fourni |
+| `product_mcp/` | Serveur MCP : outils produit (catalogue) + stock (lecture seule de la DB Backoffice) pour l'agent IA | Task 4-5, fait |
+| `ai_service/` | Service IA : reçoit une question, l'agent (Claude, tool-use) appelle le serveur MCP, renvoie une réponse | Task 5, fait |
+| `client_web/` | Page publique statique, sans authentification, qui pose des questions au Service IA | Task 6, fait |
+| Base de données relationnelle | SQLite (fichier partagé, lu en écriture par le Backoffice et en lecture seule par `product_mcp`) | fait |
+
+## Architecture (résumé)
+
+```
+client_web  --REST-->  ai_service  --MCP (stdio)-->  product_mcp  --HTTP-->  product_api
+                                                            \--SQLite (mode=ro)--> hbntory.db
+backoffice  <--SQLAlchemy-->  hbntory.db
+backoffice  --HTTP-->  product_api
+```
+
+- Le **Backoffice** est la seule voie d'écriture sur la base de données
+  (utilisateurs, branches, stock). Il n'y stocke jamais de données produit
+  (nom, prix, description) — uniquement le `sku`, tout le reste vient de
+  l'API Produit à la demande.
+- Le **serveur MCP** est le seul point d'accès de l'agent IA aux données
+  produit et stock ; il n'écrit jamais dans la base (connexion SQLite en
+  `mode=ro`) et n'a aucune notion d'authentification (il ne fait que lire).
+- Le **Service IA** ne connaît ni la base de données ni l'API Produit
+  directement : tout passe par le serveur MCP, en client MCP standard.
+- L'**interface cliente** est anonyme et ne parle qu'au Service IA, jamais
+  directement au Backoffice ni à la base.
+
+Détails par service : [docs/database_design.md](docs/database_design.md),
+[docs/authentication_and_authorization.md](docs/authentication_and_authorization.md),
+[docs/backoffice_ui.md](docs/backoffice_ui.md),
+[product_mcp/README.md](product_mcp/README.md),
+[ai_service/README.md](ai_service/README.md),
+[client_web/README.md](client_web/README.md).
+
+## Installation et lancement
+
+Guide condensé : [LANCEMENT.md](LANCEMENT.md). Détail complet ci-dessous.
+
+### Option A — Docker Compose (Backoffice + API Produit uniquement)
 
 ```bash
 docker compose up --build
@@ -27,59 +67,62 @@ Démarre l'API Produit externe (`http://localhost:5001`) puis le Backoffice
 (`http://localhost:5000`), avec un admin déjà seedé
 (`admin` / `ChangeMe123!`, à changer via la variable `ADMIN_PASSWORD` du
 `docker-compose.yml`). Les données du Backoffice sont persistées dans le
-volume nommé `backoffice_data`.
+volume nommé `backoffice_data`. `ai_service`/`client_web` ne sont pas encore
+dans le Compose (nécessitent une clé `ANTHROPIC_API_KEY`) — les lancer
+manuellement, Option B ci-dessous.
 
-## Backoffice — démarrage rapide (sans Docker)
+### Option B — Chaque service manuellement
 
-```bash
-cd backoffice
-
-# 1. Environnement virtuel + dépendances
-python3 -m venv ../.venv
-../.venv/bin/pip install -r requirements.txt
-
-# 2. Initialiser la base de données (admin, 2 branches, stock d'exemple)
-ADMIN_PASSWORD="unMotDePasseSolide" ../.venv/bin/python seed.py
-
-# 3. Lancer l'API
-SECRET_KEY="change-me-in-production" ../.venv/bin/python app.py
-```
-
-L'interface web est servie sur `http://127.0.0.1:5000/` (identifiants de
-démo : `admin` / le mot de passe passé à `seed.py`). Elle consomme l'API
-REST du même service — voir
-[docs/database_design.md](docs/database_design.md),
-[docs/authentication_and_authorization.md](docs/authentication_and_authorization.md)
-et [docs/backoffice_ui.md](docs/backoffice_ui.md) pour le détail du schéma,
-de la stratégie d'authentification et de l'approche UI/backend.
-
-### API Produit externe — sans Docker
-
-`product_api/app.py` ne dépend d'aucune librairie tierce (uniquement la
-stdlib Python), donc si Docker n'est pas disponible elle peut tourner
-directement :
+#### 1. API Produit externe
 
 ```bash
 cd product_api
 HBN_PRODUCTS_PORT=5001 python3 app.py
 ```
 
-Puis lancer le Backoffice avec `PRODUCT_API_URL=http://127.0.0.1:5001` (au
-lieu du nom de service Docker `external-products-api`). Voir
-[product_api/README.md](product_api/README.md) et
-[product_api/docs/api_contract.md](product_api/docs/api_contract.md) pour le
-contrat complet (endpoints, `simulate_delay_ms`, `force_error`).
+Aucune dépendance tierce (stdlib uniquement). Vérifier :
+`curl http://127.0.0.1:5001/health`. Contrat complet :
+[product_api/README.md](product_api/README.md),
+[product_api/docs/api_contract.md](product_api/docs/api_contract.md).
 
-### Variables d'environnement
+#### 2. Backoffice — initialiser la base de données et lancer l'API
+
+```bash
+cd backoffice
+python3 -m venv ../.venv
+../.venv/bin/pip install -r requirements.txt
+
+# Initialise la base : admin, 2 branches (Lyon, Paris), stock d'exemple
+ADMIN_PASSWORD="unMotDePasseSolide" ../.venv/bin/python seed.py
+
+SECRET_KEY="change-me-in-production" PRODUCT_API_URL="http://127.0.0.1:5001" ../.venv/bin/python app.py
+```
+
+`seed.py` doit tourner avant le premier lancement (il crée la base
+`hbntory.db` si elle n'existe pas). Le réexécuter est sans danger tant que
+la base n'existe pas déjà — sur une base existante il échouera plutôt que
+de dupliquer les données (username unique).
+
+#### Accéder au Backoffice
+
+Interface web : `http://127.0.0.1:5000/` — identifiants `admin` / le mot de
+passe passé à `ADMIN_PASSWORD` lors du `seed.py`. Un admin gère les
+utilisateurs (créer/modifier/soft-delete un utilisateur commun, changer sa
+branche ou son mot de passe) ; un utilisateur commun gère le stock de sa
+seule branche assignée (ajouter/retirer/consulter). Détail des rôles et
+routes : [docs/authentication_and_authorization.md](docs/authentication_and_authorization.md),
+table des routes ci-dessous.
+
+#### Variables d'environnement (Backoffice)
 
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `DATABASE_URL` | URL de connexion SQLAlchemy | `sqlite:///hbntory.db` |
-| `ADMIN_PASSWORD` | Mot de passe en clair de l'admin, utilisé une seule fois par `seed.py` pour générer le hash Argon2id | *(obligatoire, aucun défaut)* |
+| `ADMIN_PASSWORD` | Mot de passe en clair de l'admin, utilisé une seule fois par `seed.py` | *(obligatoire, aucun défaut)* |
 | `SECRET_KEY` | Clé de signature des cookies de session Flask | valeur aléatoire (dev uniquement) |
-| `PRODUCT_API_URL` | URL de l'API Produit externe (conteneur Docker) | `http://localhost:5001` |
+| `PRODUCT_API_URL` | URL de l'API Produit externe | `http://localhost:5001` |
 
-### Principales routes de l'API
+#### Principales routes de l'API Backoffice
 
 | Méthode | Route | Rôle requis | Description |
 |---|---|---|---|
@@ -100,27 +143,119 @@ contrat complet (endpoints, `simulate_delay_ms`, `force_error`).
 | GET | `/api/products?q=&limit=` | authentifié | Proxy lecture seule vers l'API Produit (liste/recherche) |
 | GET | `/api/products/<sku>` | authentifié | Proxy lecture seule vers l'API Produit (détail) |
 
-## Serveur MCP Produit + Stock (`product_mcp/`)
+#### 3. Serveur MCP Produit + Stock
 
-Serveur MCP en stdio (pas de port HTTP), lancé comme sous-processus par un
-client MCP (l'agent IA). Voir [product_mcp/README.md](product_mcp/README.md)
-pour la liste des outils et les tests manuels.
-
-## Service IA et interface client (`ai_service/`, `client_web/`)
+N'a pas de port HTTP : c'est un serveur MCP en stdio, lancé comme
+sous-processus (par `ai_service` ou par son propre script de test).
 
 ```bash
-# 1. API Produit + Backoffice (seedé) déjà lancés, voir ci-dessus
-# 2. Service IA
+cd product_mcp
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+PRODUCT_API_URL=http://127.0.0.1:5001 DATABASE_URL="sqlite:///../backoffice/hbntory.db" .venv/bin/python manual_test.py
+```
+
+Liste des outils et tests manuels : [product_mcp/README.md](product_mcp/README.md).
+
+#### 4. Service IA
+
+```bash
 cd ai_service
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env   # renseigner ANTHROPIC_API_KEY
 .venv/bin/python app.py   # http://localhost:5002
+```
 
-# 3. Interface cliente (page statique)
-cd ../client_web
+Contrat REST (`POST /api/ask`), types de questions supportés, gestion
+d'erreurs, observabilité des appels d'outils :
+[ai_service/README.md](ai_service/README.md).
+
+#### 5. Interface cliente (utiliser le Client Web Interface)
+
+```bash
+cd client_web
 python3 -m http.server 5173   # http://localhost:5173
 ```
 
-Voir [ai_service/README.md](ai_service/README.md) (contrat REST, gestion
-d'erreurs) et [client_web/README.md](client_web/README.md) (questions
-d'exemple, comportement de l'interface).
+Ouvrir `http://localhost:5173/`, taper une question dans le champ de texte
+et cliquer sur "Envoyer" (ou utiliser les exemples affichés sur la page).
+Aucune authentification requise. Questions d'exemple documentées :
+[client_web/README.md](client_web/README.md).
+
+## Tests
+
+- `backoffice/tests/` — suite automatisée `pytest` (auth, autorisation par
+  rôle, règles de stock — voir la liste des scénarios ci-dessous) :
+
+  ```bash
+  cd backoffice
+  ../.venv/bin/pip install -r requirements-dev.txt
+  ../.venv/bin/python -m pytest tests/ -v
+  ```
+
+- `backoffice/manual_test.py`, `product_mcp/manual_test.py`,
+  `ai_service/manual_test.py` — scripts de vérification manuelle par
+  service (voir leurs README respectifs).
+
+### Scénarios critiques couverts
+
+| Scénario | Où |
+|---|---|
+| Utilisateur commun ajoute du stock valide | `tests/test_api_stock.py` |
+| Utilisateur commun retire du stock valide | `tests/test_api_stock.py` |
+| Ne peut pas retirer plus que le stock disponible | `tests/test_api_stock.py`, `tests/test_stock_rules.py` |
+| Ne peut pas opérer sur une autre branche | `tests/test_api_stock.py` |
+| Admin peut créer un utilisateur commun | `tests/test_api_auth.py` |
+| Admin peut soft-delete un utilisateur | `tests/test_api_auth.py` |
+| Utilisateur supprimé ne peut plus se connecter | `tests/test_api_auth.py` |
+| Admin ne peut pas gérer le stock | `tests/test_api_stock.py` |
+| Détails produit obtenus depuis l'API externe | `product_mcp/README.md` (test manuel) |
+| L'IA répond où un produit est disponible | `ai_service/README.md` (test manuel, nécessite une clé API) |
+| L'IA répond quels produits sont disponibles dans une branche | idem |
+| L'IA répond clairement pour un produit inconnu | idem |
+| L'IA répond clairement quand l'information est indisponible | idem |
+
+## Principales décisions techniques
+
+- **REST** pour le Backoffice et l'interface cliente (pas de SSR, pas de
+  WebSocket) : chaque question/action est indépendante, pas d'historique de
+  conversation requis — REST est suffisant et plus simple à déboguer.
+- **MCP standard** entre le Service IA et les données produit/stock plutôt
+  qu'un accès direct : découple totalement l'agent de ses sources de
+  données (l'un peut évoluer sans l'autre).
+- **Extension du serveur MCP existant pour le stock** plutôt qu'un second
+  serveur MCP ou une API interne dédiée : un seul point d'accès en lecture
+  seule (`mode=ro` SQLite) pour tout ce que l'agent peut voir.
+- **SQLite partagé** entre le Backoffice (lecture/écriture via SQLAlchemy)
+  et `product_mcp` (lecture seule via `sqlite3`, `mode=ro`) : évite de
+  dupliquer les données de stock, au prix d'un couplage sur le format du
+  fichier plutôt qu'une vraie API interne.
+- **Système de prompt restrictif** dans l'agent (4 types de questions
+  supportés, tout le reste explicitement refusé) plutôt qu'un agent
+  généraliste : réponses prévisibles, jamais de données inventées.
+- **Frontend sans framework** (Backoffice et client) : HTML/CSS/JS simple,
+  cohérent avec la simplicité demandée par le sujet, pas de build step.
+
+## Limitations connues
+
+- Pas de conteneurisation Docker pour `ai_service`/`client_web` (seulement
+  `backoffice`/`product_api` dans `docker-compose.yml`).
+- Le lien Backoffice ↔ `product_mcp` se fait via le fichier SQLite partagé
+  (chemin relatif) plutôt qu'un vrai contrat d'API interne — fonctionne en
+  local, fragile si les deux services tournent sur des machines séparées.
+- L'agent IA n'a été testé de bout en bout qu'avec les outils MCP (sans
+  appel LLM réel) dans cet environnement de développement, faute de clé
+  `ANTHROPIC_API_KEY` disponible — voir
+  [ai_service/README.md](ai_service/README.md) pour le détail de ce qui a
+  été vérifié.
+- Pas de test automatisé du rendu visuel de `client_web` dans un vrai
+  navigateur (logique JS vérifiée contre l'API réelle via `curl`).
+- Une seule langue de réponse suivie (celle de la question), pas de
+  détection de langue robuste au-delà de l'instruction donnée au modèle.
+
+## Fonctionnalités optionnelles implémentées
+
+Aucune des fonctionnalités listées comme optionnelles dans le sujet
+(streaming WebSocket, historique de conversation, agent multi-étapes,
+tests de bout en bout complets) n'a été implémentée — voir
+[docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+§3.3 pour la liste et la justification du choix de rester sur le MVP.

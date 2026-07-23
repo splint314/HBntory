@@ -57,10 +57,17 @@ HBN_PRODUCTS_PORT=5001 python3 app.py
 Then run the Backoffice with `PRODUCT_API_URL=http://127.0.0.1:5001` instead of the Docker
 service DNS name `external-products-api`.
 
-There is no automated test suite (no pytest). `backoffice/manual_test.py` is a manual sanity
-script for the stock validation rules — run `python seed.py` first (creates the Lyon branch
-it depends on), then `python manual_test.py`. `product_api/scripts/smoke_test.py` is a smoke
-test for the Product API: `python3 scripts/smoke_test.py http://localhost:5001`.
+Automated tests: `backoffice/tests/` (pytest — auth, role authorization, stock rules).
+Install `backoffice/requirements-dev.txt` (adds `pytest` on top of `requirements.txt`), then
+`cd backoffice && ../.venv/bin/python -m pytest tests/ -v`. Each test gets a fresh temp SQLite
+DB via the `app_ctx` fixture in `tests/conftest.py`, which re-imports every backoffice module
+after setting `DATABASE_URL` (they cache their engine/session at import time) — `product_exists`
+is monkeypatched so tests never hit the real Product API.
+
+`backoffice/manual_test.py` is a manual sanity script for the stock validation rules — run
+`python seed.py` first (creates the Lyon branch it depends on), then `python manual_test.py`.
+`product_api/scripts/smoke_test.py` is a smoke test for the Product API:
+`python3 scripts/smoke_test.py http://localhost:5001`.
 `product_mcp/manual_test.py` exercises the MCP tools via FastMCP's own `call_tool` path
 (needs the Product API running): `PRODUCT_API_URL=http://127.0.0.1:5001
 DATABASE_URL="sqlite:///../backoffice/hbntory.db" .venv/bin/python manual_test.py` (run from
