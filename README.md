@@ -13,7 +13,9 @@ stratégies de communication, MVP).
 |---|---|
 | `backoffice/` | Task 0-3 : modèles, base de données, API REST, authentification/autorisation, interface web (stock + gestion utilisateurs) |
 | `product_api/` | API Produit externe fournie (vendored depuis [hbntory-products-api](https://github.com/hbtn-edu/hbntory-products-api)), lecture seule, non modifiée |
-| Serveur MCP Produit, Service IA, Interface client (public) | Pas encore commencés |
+| `product_mcp/` | Task 4-5 : serveur MCP Produit + Stock (`list_products_tool`, `get_product_details`, `list_branches_tool`, `get_stock_by_branch_tool`, `get_branches_with_product_tool`) |
+| `ai_service/` | Task 5 : Service IA (agent Claude en tool-use sur le serveur MCP), API REST `/api/ask` |
+| `client_web/` | Task 6 : interface cliente publique (page statique, sans authentification) |
 
 ## Tout lancer avec Docker Compose
 
@@ -97,3 +99,28 @@ contrat complet (endpoints, `simulate_delay_ms`, `force_error`).
 | POST | `/api/stock/remove` | common | Retirer du stock de sa branche |
 | GET | `/api/products?q=&limit=` | authentifié | Proxy lecture seule vers l'API Produit (liste/recherche) |
 | GET | `/api/products/<sku>` | authentifié | Proxy lecture seule vers l'API Produit (détail) |
+
+## Serveur MCP Produit + Stock (`product_mcp/`)
+
+Serveur MCP en stdio (pas de port HTTP), lancé comme sous-processus par un
+client MCP (l'agent IA). Voir [product_mcp/README.md](product_mcp/README.md)
+pour la liste des outils et les tests manuels.
+
+## Service IA et interface client (`ai_service/`, `client_web/`)
+
+```bash
+# 1. API Produit + Backoffice (seedé) déjà lancés, voir ci-dessus
+# 2. Service IA
+cd ai_service
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env   # renseigner ANTHROPIC_API_KEY
+.venv/bin/python app.py   # http://localhost:5002
+
+# 3. Interface cliente (page statique)
+cd ../client_web
+python3 -m http.server 5173   # http://localhost:5173
+```
+
+Voir [ai_service/README.md](ai_service/README.md) (contrat REST, gestion
+d'erreurs) et [client_web/README.md](client_web/README.md) (questions
+d'exemple, comportement de l'interface).
