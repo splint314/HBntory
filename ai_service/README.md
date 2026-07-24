@@ -60,6 +60,54 @@ CORS is open (`Access-Control-Allow-Origin: *`) since the public client page
 (`client_web/`) is an unauthenticated static page that may be served from a
 different origin.
 
+## Supported question types (Task 5.1)
+
+The system prompt (`agent.py`) restricts the agent to exactly these four
+categories — anything else, it is instructed to say plainly is outside
+scope instead of improvising an answer:
+
+1. **Product details** — "Quels sont les détails du produit HB-LAP-1001 ?"
+2. **Which branch(es) have a product** — "Quelles branches ont du stock du
+   produit HB-KBD-4102 ?"
+3. **What's available in a branch** — "Quels produits sont disponibles dans
+   la branche Lyon ?"
+4. **Shopping-list feasibility** — "J'ai besoin de 5 claviers et 2
+   écrans, une branche peut-elle tout fournir ?" — the agent checks each
+   item's *quantity* against each branch's actual stock (via
+   `get_branches_with_product_tool` per item), not just whether the branch
+   stocks the product at all.
+
+Grounding (Task 5.4): the agent has no product/stock knowledge of its own —
+every fact in an answer comes from a tool call in the same request. If a
+tool reports "not found" or is unavailable, the agent is instructed to say
+so rather than guess.
+
+## Observing tool calls (Task 5.2)
+
+Every tool call the agent makes (name, arguments) and its result
+(`isError`, truncated content) is logged at `INFO` level under the
+`hbntory.agent` logger. Running `python app.py` directly enables this via
+`logging.basicConfig` in `app.py`'s `__main__` block, so tool activity is
+visible on stdout while the server runs — e.g.:
+
+```
+hbntory.agent: tool call: get_branches_with_product_tool({'product_sku': 'HB-KBD-4102'})
+hbntory.agent: tool result: get_branches_with_product_tool -> isError=False {"product_sku": "HB-KBD-4102", "branches": [{"branch_name": "Lyon", "quantity": 25}]}
+```
+
+## Stock-query strategy (Task 5.3)
+
+Stock tools are exposed **by the Product MCP server** (`product_mcp/`,
+extended in Task 5 with `stock_client.py`), not by a separate database MCP
+tool or a second internal API — one MCP connection gives the agent both
+catalog and stock data, and the boundary (read-only, `mode=ro` SQLite
+connection, no writes possible) is enforced at the same layer as the
+product tools. See
+[product_mcp/README.md](../product_mcp/README.md#error-handling) for why
+this was chosen over the alternatives (extend MCP vs. DB tool vs. internal
+API) and the tool contracts (`get_branches_with_product_tool`,
+`get_stock_by_branch_tool`, `list_branches_tool`).
+
 ## Error handling
 
 - **Missing API key / LLM failure** → `agent.py` checks for
