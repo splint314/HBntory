@@ -27,5 +27,39 @@ services:
       - "5000:5000"
     restart: unless-stopped
 
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai_service/Dockerfile
+    container_name: hbntory-ai-service
+    depends_on:
+      - external-products-api
+      - backoffice
+    environment:
+      # Empty by default so the whole stack still boots without a key:
+      # /api/ask then replies 503 agent_unavailable instead of crashing
+      # (see ai_service/README.md). Set it in your shell or a .env file at
+      # the repo root for the agent to actually answer.
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      PRODUCT_API_URL: "http://external-products-api:5000"
+      # Same SQLite file as the Backoffice, mounted read-only below: the
+      # MCP stock tools open it with mode=ro regardless, this is
+      # defense-in-depth at the container level too.
+      DATABASE_URL: "sqlite:////data/hbntory.db"
+    volumes:
+      - backoffice_data:/data:ro
+    ports:
+      - "5002:5002"
+    restart: unless-stopped
+
+  client-web:
+    build: ./client_web
+    container_name: hbntory-client-web
+    depends_on:
+      - ai-service
+    ports:
+      - "5173:5173"
+    restart: unless-stopped
+
 volumes:
   backoffice_data:

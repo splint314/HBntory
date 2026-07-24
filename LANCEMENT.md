@@ -3,12 +3,16 @@
 ## Option 1 — Docker Compose (le plus simple)
 
 ```bash
+# Optionnel, pour que l'agent IA réponde vraiment (sinon 503 propre) :
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+
 docker compose up --build
 ```
 
 - API Produit externe : http://localhost:5001
-- Backoffice : http://localhost:5000
-- Identifiants : `admin` / `ChangeMe123!`
+- Backoffice : http://localhost:5000 — identifiants `admin` / `ChangeMe123!`
+- Service IA : http://localhost:5002 (`POST /api/ask`)
+- Interface cliente : http://localhost:5173
 
 ## Option 2 — Sans Docker
 

@@ -29,10 +29,16 @@ Run everything via Docker Compose (from repo root):
 docker compose up --build
 ```
 
-Starts the external Product API (`http://localhost:5001`) then the Backoffice
-(`http://localhost:5000`), with an admin already seeded (`admin` / `ChangeMe123!`, override
-via `ADMIN_PASSWORD` in `docker-compose.yml`). Backoffice data persists in the
-`backoffice_data` named volume.
+Starts, in dependency order: the external Product API (`http://localhost:5001`), the
+Backoffice (`http://localhost:5000`, admin already seeded `admin` / `ChangeMe123!`, override
+via `ADMIN_PASSWORD` in `docker-compose.yml`), the AI Query Service (`http://localhost:5002`),
+and the client web interface (`http://localhost:5173`). Backoffice data persists in the
+`backoffice_data` named volume, mounted read-only into the `ai-service` container for the
+Product MCP server's stock tools (`product_mcp/` has no container of its own — no HTTP port,
+it's spawned as a subprocess by `ai_service`, see `ai_service/Dockerfile`). Put
+`ANTHROPIC_API_KEY=sk-ant-...` in a `.env` file at the repo root (compose loads it
+automatically) for the agent to give real answers; without it everything still starts, only
+`POST /api/ask` replies `503 agent_unavailable`.
 
 Backoffice without Docker:
 
@@ -192,3 +198,5 @@ example questions.
   its features.
 - `product_api/docs/api_contract.md` / `product_api/docs/openapi.yaml` — full Product API
   contract (endpoints, `simulate_delay_ms`, `force_error`).
+- `docs/demo_script.md` — suggested walkthrough for the final presentation/demo (Task 7),
+  using the data seeded by `backoffice/seed.py`.

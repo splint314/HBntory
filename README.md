@@ -57,19 +57,28 @@ Détails par service : [docs/database_design.md](docs/database_design.md),
 
 Guide condensé : [LANCEMENT.md](LANCEMENT.md). Détail complet ci-dessous.
 
-### Option A — Docker Compose (Backoffice + API Produit uniquement)
+### Option A — Docker Compose (les cinq services)
 
 ```bash
+# Optionnel : clé pour que l'agent réponde réellement (sinon /api/ask
+# renvoie un 503 "agent_unavailable" propre, tout le reste fonctionne).
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+
 docker compose up --build
 ```
 
-Démarre l'API Produit externe (`http://localhost:5001`) puis le Backoffice
-(`http://localhost:5000`), avec un admin déjà seedé
-(`admin` / `ChangeMe123!`, à changer via la variable `ADMIN_PASSWORD` du
-`docker-compose.yml`). Les données du Backoffice sont persistées dans le
-volume nommé `backoffice_data`. `ai_service`/`client_web` ne sont pas encore
-dans le Compose (nécessitent une clé `ANTHROPIC_API_KEY`) — les lancer
-manuellement, Option B ci-dessous.
+Démarre, dans l'ordre des dépendances : l'API Produit externe
+(`http://localhost:5001`), le Backoffice (`http://localhost:5000`, admin
+déjà seedé `admin` / `ChangeMe123!`, à changer via `ADMIN_PASSWORD` dans
+`docker-compose.yml`), le Service IA (`http://localhost:5002`) et
+l'interface cliente (`http://localhost:5173`). Les données du Backoffice
+sont persistées dans le volume nommé `backoffice_data`, monté en lecture
+seule dans le conteneur `ai-service` pour les outils de stock du serveur
+MCP (celui-ci n'a pas de conteneur propre : il n'a pas de port HTTP, il est
+lancé comme sous-processus par `ai_service`, voir
+[product_mcp/README.md](product_mcp/README.md)). Sans
+`ANTHROPIC_API_KEY`, tout démarre quand même ; seul `/api/ask` répond 503
+au lieu de donner une vraie réponse.
 
 ### Option B — Chaque service manuellement
 
@@ -237,8 +246,6 @@ Aucune authentification requise. Questions d'exemple documentées :
 
 ## Limitations connues
 
-- Pas de conteneurisation Docker pour `ai_service`/`client_web` (seulement
-  `backoffice`/`product_api` dans `docker-compose.yml`).
 - Le lien Backoffice ↔ `product_mcp` se fait via le fichier SQLite partagé
   (chemin relatif) plutôt qu'un vrai contrat d'API interne — fonctionne en
   local, fragile si les deux services tournent sur des machines séparées.
@@ -251,6 +258,11 @@ Aucune authentification requise. Questions d'exemple documentées :
   navigateur (logique JS vérifiée contre l'API réelle via `curl`).
 - Une seule langue de réponse suivie (celle de la question), pas de
   détection de langue robuste au-delà de l'instruction donnée au modèle.
+
+## Présentation et démonstration
+
+Déroulé suggéré pour la soutenance, avec les données seedées :
+[docs/demo_script.md](docs/demo_script.md).
 
 ## Fonctionnalités optionnelles implémentées
 
