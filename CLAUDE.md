@@ -89,6 +89,11 @@ Key environment variables (Backoffice): `DATABASE_URL` (default
 `seed.py`), `SECRET_KEY` (session cookie signing), `PRODUCT_API_URL` (default
 `http://localhost:5001`).
 
+Key environment variables (AI Query Service): `OLLAMA_HOST` (default
+`http://localhost:11434`), `AI_MODEL` (default `llama3.2`), `AI_SERVICE_PORT` (default
+`5002`) — plus `PRODUCT_API_URL`/`DATABASE_URL`, forwarded to the `product_mcp/server.py`
+subprocess it spawns.
+
 ## Architecture
 
 ### Data boundary (important, enforced throughout the codebase)

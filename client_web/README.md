@@ -35,8 +35,8 @@ Requires the AI Query Service (`ai_service/`) running — see
 
 - **AI Query Service reachable but returns an error** (400/503/500) — the
   response body's `message` field is shown to the user as-is (already a
-  human-readable message from `ai_service`, e.g. "ANTHROPIC_API_KEY is not
-  set." or a Product MCP failure).
+  human-readable message from `ai_service`, e.g. "Ollama is not reachable
+  at ..." or a Product MCP failure).
 - **AI Query Service unreachable** (wrong URL, service down, CORS/network
   failure) — `fetch()` rejects with a `TypeError`, which is caught and
   replaced with a generic "Impossible de joindre le service. Vérifiez qu'il
@@ -71,4 +71,4 @@ rendering, error rendering) has **not** been performed in this environment
 (no display/browser available here) — the request/response logic was
 verified against the live `ai_service` REST API with `curl` instead (see
 [ai_service/README.md](../ai_service/README.md)). Recommend a manual
-browser pass once `ANTHROPIC_API_KEY` is available.
+browser pass once Ollama has pulled a model (`ollama pull llama3.2`).
