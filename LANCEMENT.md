@@ -85,9 +85,9 @@ crash) — utile pour vérifier la connectivité MCP et le contrat REST avant d'
 | `ADMIN_PASSWORD` | Backoffice | Mot de passe admin (obligatoire pour `seed.py`) | *(aucun)* |
 | `SECRET_KEY` | Backoffice | Clé de signature des sessions | aléatoire (dev) |
 | `PRODUCT_API_URL` | Backoffice, product_mcp, ai_service | URL de l'API Produit | `http://localhost:5001` |
-| `DATABASE_URL` | Backoffice, product_mcp, ai_service | URL de la DB SQLite (stock) | `sqlite:///hbntory.db` |
+| `DATABASE_URL` | Backoffice, product_mcp, ai_service | URL de la DB SQLite (stock) — le défaut suppose d'être lancé depuis le dossier du service, d'où deux valeurs différentes | Backoffice : `sqlite:///hbntory.db` · product_mcp/ai_service : `sqlite:///../backoffice/hbntory.db` |
 | `HBN_PRODUCTS_PORT` | product_api | Port d'écoute | `5000` |
-| `ANTHROPIC_API_KEY` | ai_service | Clé API pour l'agent LLM | *(aucun, obligatoire)* |
+| `ANTHROPIC_API_KEY` | ai_service | Clé API pour l'agent LLM — sans elle le service démarre quand même, seul `/api/ask` répond `503` | *(aucun)* |
 
 ## Problèmes courants
 
@@ -97,6 +97,14 @@ crash) — utile pour vérifier la connectivité MCP et le contrat REST avant d'
   utiliser l'Option 2 (sans Docker).
 - **`.venv` corrompu (permission denied sur `pip`/`python`)** : le recréer (`rm -rf .venv &&
   python3 -m venv .venv && ...`), il n'est pas versionné.
+- **Backoffice ouvert avec l'extension VS Code "Live Server" (ou tout autre serveur
+  statique) sur `backoffice/static/index.html` : rien ne fonctionne (login, stock...)** :
+  attendu. `app.js` appelle des chemins **relatifs** (`/api/login`, ...) en comptant sur
+  le cookie de session same-origin — ça exige que la page soit servie par Flask lui-même
+  (`http://localhost:5000/`), pas par un serveur statique séparé sur un autre port. Ouvrir
+  directement `http://localhost:5000/`, jamais le fichier `index.html` via Live Server.
+  `client_web/`, lui, fonctionne avec n'importe quel serveur statique (Live Server compris)
+  : il appelle `ai_service` via une URL absolue avec CORS ouvert.
 
 Détails complets : [README.md](README.md), [CLAUDE.md](CLAUDE.md),
 [product_mcp/README.md](product_mcp/README.md), [ai_service/README.md](ai_service/README.md),
