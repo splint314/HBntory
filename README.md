@@ -60,7 +60,8 @@ Détails par service : [docs/database_design.md](docs/database_design.md),
 
 ## Installation et lancement
 
-Guide condensé : [LANCEMENT.md](LANCEMENT.md). Détail complet ci-dessous.
+Détail complet ci-dessous ; dépannage rapide dans
+[Problèmes courants](#problèmes-courants).
 
 ### Option A — Docker Compose (les cinq services)
 
@@ -179,6 +180,10 @@ Liste des outils et tests manuels : [product_mcp/README.md](product_mcp/README.m
 
 #### 4. Service IA
 
+Nécessite [Ollama](https://ollama.com/download) installé sur la machine
+(pas requis avec l'Option A Docker, où il tourne dans son propre
+conteneur).
+
 ```bash
 ollama pull llama3.2   # une seule fois — LLM local, gratuit, voir ai_service/README.md
 
@@ -272,6 +277,27 @@ Aucune authentification requise. Questions d'exemple documentées :
   instructions de manière moins fiable qu'un modèle frontière payant).
 - **Frontend sans framework** (Backoffice et client) : HTML/CSS/JS simple,
   cohérent avec la simplicité demandée par le sujet, pas de build step.
+
+## Problèmes courants
+
+- **`/api/ask` répond 503 "agent_unavailable"** : Ollama n'a pas encore le
+  modèle — `ollama pull llama3.2` (ou `docker compose exec ollama ollama
+  pull llama3.2` en Docker), voir §2.4 de
+  [docs/architecture_and_planning.md](docs/architecture_and_planning.md).
+- **"invalid credentials" dans l'UI du Backoffice alors que l'API répond
+  OK en `curl`** : autofill du navigateur avec un mauvais mot de passe —
+  vider le champ et le retaper.
+- **Backoffice ouvert avec l'extension VS Code "Live Server" (ou tout
+  autre serveur statique) sur `backoffice/static/index.html` : rien ne
+  fonctionne (login, stock...)** : attendu, voir
+  [docs/backoffice_ui.md](docs/backoffice_ui.md) §1 — ouvrir directement
+  `http://localhost:5000/`, jamais le fichier via Live Server.
+  `client_web/` n'a pas cette contrainte (URL absolue, CORS ouvert).
+- **Docker introuvable sous WSL** : activer l'intégration WSL dans Docker
+  Desktop, ou utiliser l'Option B (sans Docker) ci-dessus.
+- **`.venv` corrompu (permission denied sur `pip`/`python`)** : le
+  recréer (`rm -rf .venv && python3 -m venv .venv && ...`), il n'est pas
+  versionné.
 
 ## Limitations connues
 

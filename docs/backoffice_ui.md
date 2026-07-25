@@ -34,7 +34,7 @@ la consomme via `fetch()`, sans framework ni étape de build.
 serveur statique séparé (l'extension VS Code "Live Server", `python -m
 http.server` sur un autre port, etc.) — elle doit être servie par Flask
 lui-même, à `http://localhost:5000/`. Voir
-[LANCEMENT.md](../LANCEMENT.md#problèmes-courants) pour ce cas précis.
+[README.md](../README.md#problèmes-courants) pour ce cas précis.
 
 ## 2. Opérations de stock (utilisateur commun)
 
