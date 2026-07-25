@@ -21,7 +21,7 @@ communication, MVP) :
 | `backoffice/` | API REST + interface web interne : gestion des utilisateurs (admin) et du stock (utilisateurs communs) | Task 0-3, fait |
 | `product_api/` | Catalogue fournisseur externe, vendored, lecture seule, non modifié | fourni |
 | `product_mcp/` | Serveur MCP : outils produit (catalogue) + stock (lecture seule de la DB Backoffice) pour l'agent IA | Task 4-5, fait |
-| `ai_service/` | Service IA : reçoit une question, l'agent (Claude, tool-use) appelle le serveur MCP, renvoie une réponse | Task 5, fait |
+| `ai_service/` | Service IA : reçoit une question, l'agent (LLM local via Ollama, tool-use) appelle le serveur MCP, renvoie une réponse | Task 5, fait |
 | `client_web/` | Page publique statique, sans authentification, qui pose des questions au Service IA | Task 6, fait |
 | Base de données relationnelle | SQLite (fichier partagé, lu en écriture par le Backoffice et en lecture seule par `product_mcp`) | fait |
 
@@ -65,25 +65,29 @@ Guide condensé : [LANCEMENT.md](LANCEMENT.md). Détail complet ci-dessous.
 ### Option A — Docker Compose (les cinq services)
 
 ```bash
-# Optionnel : clé pour que l'agent réponde réellement (sinon /api/ask
-# renvoie un 503 "agent_unavailable" propre, tout le reste fonctionne).
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
-
 docker compose up --build
+
+# Une fois démarré, récupérer le modèle local (une seule fois, persisté
+# dans le volume ollama_data — pas besoin de le refaire au prochain lancement) :
+docker compose exec ollama ollama pull llama3.2
 ```
 
 Démarre, dans l'ordre des dépendances : l'API Produit externe
 (`http://localhost:5001`), le Backoffice (`http://localhost:5000`, admin
 déjà seedé `admin` / `ChangeMe123!`, à changer via `ADMIN_PASSWORD` dans
-`docker-compose.yml`), le Service IA (`http://localhost:5002`) et
-l'interface cliente (`http://localhost:5173`). Les données du Backoffice
-sont persistées dans le volume nommé `backoffice_data`, monté en lecture
-seule dans le conteneur `ai-service` pour les outils de stock du serveur
-MCP (celui-ci n'a pas de conteneur propre : il n'a pas de port HTTP, il est
-lancé comme sous-processus par `ai_service`, voir
-[product_mcp/README.md](product_mcp/README.md)). Sans
-`ANTHROPIC_API_KEY`, tout démarre quand même ; seul `/api/ask` répond 503
-au lieu de donner une vraie réponse.
+`docker-compose.yml`), **Ollama** (`http://localhost:11434`, le LLM local
+qui sert l'agent — voir §2.4 de
+[docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+pour la justification de ce choix plutôt qu'une API payante), le Service
+IA (`http://localhost:5002`) et l'interface cliente
+(`http://localhost:5173`). Les données du Backoffice sont persistées dans
+le volume nommé `backoffice_data`, monté en lecture seule dans le
+conteneur `ai-service` pour les outils de stock du serveur MCP (celui-ci
+n'a pas de conteneur propre : il n'a pas de port HTTP, il est lancé comme
+sous-processus par `ai_service`, voir
+[product_mcp/README.md](product_mcp/README.md)). Tant que le modèle n'est
+pas récupéré via `ollama pull`, `/api/ask` répond 503 au lieu de donner
+une vraie réponse — tout le reste fonctionne sans attendre.
 
 ### Option B — Chaque service manuellement
 
@@ -176,15 +180,27 @@ Liste des outils et tests manuels : [product_mcp/README.md](product_mcp/README.m
 #### 4. Service IA
 
 ```bash
+ollama pull llama3.2   # une seule fois — LLM local, gratuit, voir ai_service/README.md
+
 cd ai_service
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.example .env   # renseigner ANTHROPIC_API_KEY
+cp .env.example .env
 .venv/bin/python app.py   # http://localhost:5002
 ```
 
 Contrat REST (`POST /api/ask`), types de questions supportés, gestion
 d'erreurs, observabilité des appels d'outils :
 [ai_service/README.md](ai_service/README.md).
+
+#### Variables d'environnement (Service IA)
+
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `OLLAMA_HOST` | URL du serveur Ollama local | `http://localhost:11434` |
+| `AI_MODEL` | Modèle Ollama utilisé par l'agent | `llama3.2` |
+| `AI_SERVICE_PORT` | Port d'écoute du service | `5002` |
+| `PRODUCT_API_URL` | URL de l'API Produit (transmise au serveur MCP) | `http://localhost:5001` |
+| `DATABASE_URL` | URL de la DB SQLite (transmise au serveur MCP, lecture seule) | `sqlite:///../backoffice/hbntory.db` |
 
 #### 5. Interface cliente (utiliser le Client Web Interface)
 
@@ -226,9 +242,9 @@ Aucune authentification requise. Questions d'exemple documentées :
 | Utilisateur supprimé ne peut plus se connecter | `tests/test_api_auth.py` |
 | Admin ne peut pas gérer le stock | `tests/test_api_stock.py` |
 | Détails produit obtenus depuis l'API externe | `product_mcp/README.md` (test manuel) |
-| L'IA répond où un produit est disponible | `ai_service/README.md` (test manuel, nécessite une clé API) |
-| L'IA répond quels produits sont disponibles dans une branche | idem |
-| L'IA répond clairement pour un produit inconnu | idem |
+| L'IA répond où un produit est disponible | `ai_service/README.md` (vérifié en direct, réponse correcte) |
+| L'IA répond quels produits sont disponibles dans une branche | `ai_service/README.md` (vérifié en direct — un essai a dépassé le délai à cause d'un détour du modèle, correctement renvoyé en 503 plutôt qu'un crash) |
+| L'IA répond clairement pour un produit inconnu | `ai_service/README.md` (vérifié en direct, réponse correcte) |
 | L'IA répond clairement quand l'information est indisponible | idem |
 
 ## Principales décisions techniques
@@ -249,6 +265,11 @@ Aucune authentification requise. Questions d'exemple documentées :
 - **Système de prompt restrictif** dans l'agent (4 types de questions
   supportés, tout le reste explicitement refusé) plutôt qu'un agent
   généraliste : réponses prévisibles, jamais de données inventées.
+- **LLM local (Ollama) plutôt qu'une API payante** : projet étudiant sans
+  budget récurrent — voir
+  [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+  §2.4 pour le compromis accepté (un petit modèle local suit les
+  instructions de manière moins fiable qu'un modèle frontière payant).
 - **Frontend sans framework** (Backoffice et client) : HTML/CSS/JS simple,
   cohérent avec la simplicité demandée par le sujet, pas de build step.
 
@@ -257,11 +278,14 @@ Aucune authentification requise. Questions d'exemple documentées :
 - Le lien Backoffice ↔ `product_mcp` se fait via le fichier SQLite partagé
   (chemin relatif) plutôt qu'un vrai contrat d'API interne — fonctionne en
   local, fragile si les deux services tournent sur des machines séparées.
-- L'agent IA n'a été testé de bout en bout qu'avec les outils MCP (sans
-  appel LLM réel) dans cet environnement de développement, faute de clé
-  `ANTHROPIC_API_KEY` disponible — voir
-  [ai_service/README.md](ai_service/README.md) pour le détail de ce qui a
-  été vérifié.
+- **Latence de l'agent IA** : 1 à 3 minutes par question en pratique
+  (inférence CPU locale via Ollama, modèle déjà chargé) — acceptable pour
+  une démonstration mais pas pour de la production. Voir
+  [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+  §2.4 et [ai_service/README.md](ai_service/README.md) pour le détail des
+  tests effectués (boucle complète vérifiée de bout en bout, réponses
+  correctement fondées sur les données réelles de l'API Produit et du
+  stock).
 - Pas de test automatisé du rendu visuel de `client_web` dans un vrai
   navigateur (logique JS vérifiée contre l'API réelle via `curl`).
 - Une seule langue de réponse suivie (celle de la question), pas de

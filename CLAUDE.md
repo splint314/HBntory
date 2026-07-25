@@ -14,8 +14,8 @@ school project). All six services from `docs/architecture_and_planning.md` now e
 - `product_mcp/` — MCP server bridging the AI agent to the Product API and (read-only) to
   the Backoffice's stock data. Exposes `list_products_tool`, `get_product_details`,
   `list_branches_tool`, `get_stock_by_branch_tool`, `get_branches_with_product_tool`.
-- `ai_service/` — REST API embedding the AI agent (Claude, tool use against the Product MCP
-  server). One endpoint, `POST /api/ask`, no conversation history between requests.
+- `ai_service/` — REST API embedding the AI agent (a local Ollama model, tool use against the
+  Product MCP server). One endpoint, `POST /api/ask`, no conversation history between requests.
 - `client_web/` — public, unauthenticated static page (no framework) that calls `ai_service`.
 
 Everything is in French in docs/README (student project for a French school); code and
@@ -31,14 +31,16 @@ docker compose up --build
 
 Starts, in dependency order: the external Product API (`http://localhost:5001`), the
 Backoffice (`http://localhost:5000`, admin already seeded `admin` / `ChangeMe123!`, override
-via `ADMIN_PASSWORD` in `docker-compose.yml`), the AI Query Service (`http://localhost:5002`),
-and the client web interface (`http://localhost:5173`). Backoffice data persists in the
-`backoffice_data` named volume, mounted read-only into the `ai-service` container for the
-Product MCP server's stock tools (`product_mcp/` has no container of its own — no HTTP port,
-it's spawned as a subprocess by `ai_service`, see `ai_service/Dockerfile`). Put
-`ANTHROPIC_API_KEY=sk-ant-...` in a `.env` file at the repo root (compose loads it
-automatically) for the agent to give real answers; without it everything still starts, only
-`POST /api/ask` replies `503 agent_unavailable`.
+via `ADMIN_PASSWORD` in `docker-compose.yml`), Ollama (`http://localhost:11434`, the local LLM
+serving the agent — no API key, no cost, see docs/architecture_and_planning.md §2.4), the AI
+Query Service (`http://localhost:5002`), and the client web interface
+(`http://localhost:5173`). Backoffice data persists in the `backoffice_data` named volume,
+mounted read-only into the `ai-service` container for the Product MCP server's stock tools
+(`product_mcp/` has no container of its own — no HTTP port, it's spawned as a subprocess by
+`ai_service`, see `ai_service/Dockerfile`). After the first `docker compose up`, pull the model
+once (persisted in the `ollama_data` volume): `docker compose exec ollama ollama pull
+llama3.2`. Until that finishes, everything else still starts; only `POST /api/ask` replies
+`503 agent_unavailable`.
 
 Backoffice without Docker:
 
@@ -79,8 +81,8 @@ is monkeypatched so tests never hit the real Product API.
 DATABASE_URL="sqlite:///../backoffice/hbntory.db" .venv/bin/python manual_test.py` (run from
 `product_mcp/`, with its own venv — see `product_mcp/README.md`).
 `ai_service/manual_test.py` checks Product MCP connectivity unconditionally, and additionally
-runs the full agent loop against example questions if `ANTHROPIC_API_KEY` is set (own venv,
-see `ai_service/README.md`).
+runs the full agent loop against example questions if Ollama is reachable at `OLLAMA_HOST`
+(own venv, see `ai_service/README.md`).
 
 Key environment variables (Backoffice): `DATABASE_URL` (default
 `sqlite:///hbntory.db`), `ADMIN_PASSWORD` (required, no default, consumed once by
@@ -169,14 +171,18 @@ stack trace. See `product_mcp/README.md` for the full tool contract and manual t
 ### AI Query Service (`ai_service/`)
 
 Flask REST API with a single endpoint, `POST /api/ask` (`{"question": ...}` →
-`{"answer": ...}`). `agent.py` runs a standard Anthropic tool-use loop (`MAX_TOOL_TURNS = 8`):
-it launches `product_mcp/server.py` as an MCP subprocess (`mcp_client.py`,
-`PRODUCT_API_URL`/`DATABASE_URL` forwarded from its own environment), converts the MCP tool
-list to Anthropic's `input_schema` format, and lets Claude call tools until it produces a
-final text answer. The system prompt (in `agent.py`) is the enforcement point for "never
-invent data, say plainly when something is unavailable" (§1.3 of the architecture doc).
-Missing `ANTHROPIC_API_KEY`, an LLM API failure, or the MCP subprocess failing to start all
-become `AgentError` → HTTP 503 `agent_unavailable`; anything unexpected is caught by a
+`{"answer": ...}`). `agent.py` runs a tool-use loop (`MAX_TOOL_TURNS = 8`) against a **local
+Ollama server** (`OLLAMA_HOST`, default `http://localhost:11434`; model via `AI_MODEL`,
+default `llama3.2`) instead of a paid hosted API — no key, no cost, see
+docs/architecture_and_planning.md §2.4. It launches `product_mcp/server.py` as an MCP
+subprocess (`mcp_client.py`, `PRODUCT_API_URL`/`DATABASE_URL` forwarded from its own
+environment), converts the MCP tool list to Ollama's `{"type": "function", "function": {...}}`
+format, and calls `POST {OLLAMA_HOST}/api/chat` until the model returns a message with no
+`tool_calls`. The system prompt (in `agent.py`) is the enforcement point for "never invent
+data, say plainly when something is unavailable" (§1.3 of the architecture doc) — a small
+local model follows this less reliably than a frontier model, a known trade-off (§2.4).
+Ollama being unreachable, an HTTP error from `/api/chat`, or the MCP subprocess failing to
+start all become `AgentError` → HTTP 503 `agent_unavailable`; anything unexpected is caught by a
 Flask-wide error handler → 500 `internal_error` (never a raw HTML stack trace). See
 `ai_service/README.md` for the full contract.
 
