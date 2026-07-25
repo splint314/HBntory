@@ -9,6 +9,7 @@ history kept across requests (matches the "no history required" choice in
 """
 
 import json
+import logging
 import os
 
 import anthropic
@@ -18,9 +19,20 @@ from mcp_client import MCPConnectionError, product_mcp_session
 MODEL = os.getenv("AI_MODEL", "claude-sonnet-5")
 MAX_TOOL_TURNS = 8
 
+logger = logging.getLogger("hbntory.agent")
+
+# Task 5.1: the question types this service is built to answer. Anything
+# else, the agent is instructed to decline rather than improvise — see the
+# last rule in SYSTEM_PROMPT and ai_service/README.md for the full list.
 SYSTEM_PROMPT = """\
 You are the HBntory shopping assistant. You answer questions from anonymous \
-website visitors about the product catalog and which branches have stock.
+website visitors, strictly limited to these supported question types:
+1. Details about a specific product (name, description, price, brand, ...).
+2. Which branch(es) have stock of a given product.
+3. Which products are available in a given branch.
+4. Whether a shopping list (products + desired quantities) can be satisfied \
+by one branch, and if so which one(s) — check each item's quantity against \
+each branch's actual stock via the tools, don't just check availability.
 
 Rules:
 - Always use the provided tools to look up product and stock information. \
@@ -29,6 +41,10 @@ Never invent a product, price, description, or stock quantity.
 unavailable, say so plainly instead of guessing.
 - If the available tools cannot answer the question, say the information \
 is unavailable rather than making something up.
+- If the question is not one of the 4 supported types above (e.g. general \
+chit-chat, requests unrelated to products/stock, or anything requiring \
+data no tool provides), say clearly that it is outside what you can help \
+with — do not attempt to answer it anyway.
 - Keep answers short and to the point, in the same language as the question.
 """
 
@@ -97,15 +113,22 @@ async def answer_question(question: str) -> str:
                 for block in response.content:
                     if block.type != "tool_use":
                         continue
+                    logger.info("tool call: %s(%s)", block.name, block.input)
                     try:
                         result = await session.call_tool(block.name, block.input)
+                        result_text = _tool_result_text(result)
+                        logger.info(
+                            "tool result: %s -> isError=%s %.200s",
+                            block.name, result.isError, result_text,
+                        )
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": block.id,
-                            "content": _tool_result_text(result),
+                            "content": result_text,
                             "is_error": result.isError,
                         })
                     except Exception as e:
+                        logger.info("tool call failed: %s -> %s", block.name, e)
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": block.id,
