@@ -3,10 +3,12 @@ Manual sanity check for the AI Query Service (Task 5/6).
 
 Two parts:
 1. MCP connectivity: launches the Product MCP server and lists/calls its
-   tools directly. No LLM involved, no ANTHROPIC_API_KEY needed — this
-   part always runs and is what CI/a teammate without a key can verify.
+   tools directly. No LLM involved, no Ollama server needed — this part
+   always runs and is what CI/a teammate without Ollama installed can
+   verify.
 2. Full agent loop: asks the agent a handful of realistic questions.
-   Skipped with a clear message if ANTHROPIC_API_KEY is not set.
+   Skipped with a clear message if the local Ollama server isn't
+   reachable (see OLLAMA_HOST).
 
 Requires the Product API running (see product_api/) and the Backoffice
 database seeded (see backoffice/seed.py) for the stock questions to have
@@ -20,6 +22,8 @@ Run:
 
 import asyncio
 import os
+
+import httpx
 
 from mcp_client import product_mcp_session
 
@@ -56,9 +60,13 @@ EXAMPLE_QUESTIONS = [
 
 
 async def check_agent():
-    if not os.getenv("ANTHROPIC_API_KEY"):
+    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    try:
+        httpx.get(f"{ollama_host}/api/tags", timeout=3).raise_for_status()
+    except httpx.HTTPError:
         print(
-            "--- 2. Full agent loop: SKIPPED (ANTHROPIC_API_KEY not set) ---"
+            f"--- 2. Full agent loop: SKIPPED (Ollama not reachable at "
+            f"{ollama_host}) ---"
         )
         return
 

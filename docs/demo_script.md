@@ -1,15 +1,17 @@
 # HBntory — Script de démonstration (Task 7)
 
-> Déroulé suggéré pour la présentation finale : ~10-12 minutes, couvre
+> Déroulé suggéré pour la présentation finale : ~12-15 minutes, couvre
 > chaque exigence obligatoire du sujet avec les données déjà seedées
-> (`backoffice/seed.py`). Rien à préparer en plus si l'environnement tourne
-> déjà (voir [LANCEMENT.md](../LANCEMENT.md)).
+> (`backoffice/seed.py`). Si l'environnement tourne déjà, il ne reste
+> qu'à envoyer une question de préchauffe à l'agent IA ~10 min avant de
+> commencer (voir §4) — inférence locale sur CPU, sans ça la première
+> question en direct peut prendre plusieurs minutes.
 
 ## 0. Lancement (avant la présentation, ou en direct si le temps le permet)
 
 ```bash
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 docker compose up --build
+docker compose exec ollama ollama pull llama3.2   # une seule fois
 ```
 
 Vérifier que les 4 services répondent :
@@ -63,14 +65,33 @@ Se déconnecter, login `alice`.
 4. Montrer qu'`alice` ne peut pas atteindre `/api/users` (401/403) — pas
    d'accès admin.
 
-## 4. Interface cliente IA (3 min)
+## 4. Interface cliente IA (3-5 min)
 
-Sur `http://localhost:5173/`, poser dans l'ordre (questions déjà listées
-sur la page et dans
+⚠️ **Latence réelle observée : 1 à 3 minutes par question**, même modèle
+déjà chargé — inférence CPU locale (voir
+[docs/architecture_and_planning.md](architecture_and_planning.md) §2.4).
+**Ne pas poser les 5 questions en direct**, ça dépasserait largement le
+budget de la présentation. Stratégie recommandée :
+
+- **~10 min avant** de commencer, envoyer une question de préchauffe
+  (`curl` ou la page) pour charger le modèle en mémoire — sinon la
+  première question en direct cumule chargement + génération (jusqu'à
+  4-5 min).
+- **En direct, poser une seule question** (ex. la n°1 ci-dessous) sur
+  `http://localhost:5173/`, et **pendant l'attente**, montrer dans un
+  autre terminal les logs `hbntory.agent` (`docker compose logs -f
+  ai-service`) : chaque appel d'outil MCP y est visible (`tool call: ...`
+  / `tool result: ...`) — c'est la preuve que la réponse vient des outils,
+  pas d'une hallucination, et ça meuble l'attente utilement.
+- **Les autres questions** : les avoir déjà exécutées avant la
+  présentation et montrer une capture d'écran / le texte de la réponse,
+  plutôt que de les relancer en direct.
+
+Questions (déjà listées sur la page et dans
 [client_web/README.md](../client_web/README.md#example-questions)) :
 
 1. « Quels sont les détails du produit HB-LAP-1001 ? » — détail produit,
-   vient de l'API Produit.
+   vient de l'API Produit. *(celle à poser en direct)*
 2. « Quelles branches ont du stock du produit HB-KBD-4102 ? » — Lyon
    uniquement.
 3. « Quels produits sont disponibles dans la branche Lyon ? » — les 4 SKU
@@ -81,11 +102,6 @@ sur la page et dans
 5. (Si le temps le permet) une question hors-scope, ex. « Quelle est la
    météo à Paris ? » — l'agent doit décliner explicitement au lieu
    d'improviser.
-
-Pendant ce temps, montrer dans le terminal les logs `hbntory.agent` du
-conteneur `ai-service` (`docker compose logs -f ai-service`) : chaque appel
-d'outil MCP est visible (`tool call: ...` / `tool result: ...`) — preuve
-que la réponse vient bien des outils et non d'une hallucination.
 
 ## 5. Points à mentionner à l'oral (2 min)
 
@@ -110,11 +126,12 @@ que la réponse vient bien des outils et non d'une hallucination.
 
 ## Filet de sécurité si quelque chose échoue en direct
 
-- `ai_service` répond 503 sans `ANTHROPIC_API_KEY` — vérifier le `.env`
-  avant de démarrer, ou relancer `docker compose up ai-service`.
+- `ai_service` répond 503 si Ollama n'a pas encore reçu le modèle —
+  vérifier avec `docker compose exec ollama ollama list`, relancer
+  `docker compose exec ollama ollama pull llama3.2` si absent.
 - Si `docker compose` n'est pas disponible sur la machine de démo, utiliser
-  l'Option 2 (sans Docker) de [LANCEMENT.md](../LANCEMENT.md) — chaque
-  service se lance indépendamment avec les mêmes identifiants.
+  l'Option B (sans Docker) de [README.md](../README.md#installation-et-lancement)
+  — chaque service se lance indépendamment avec les mêmes identifiants.
 - La suite pytest (`cd backoffice && python -m pytest tests/ -v`) peut être
   lancée en direct comme filet de sécurité si une démonstration manuelle
   échoue : elle couvre les mêmes scénarios (auth, rôles, stock).

@@ -120,13 +120,33 @@ stock du produit X ? » ou « quels produits sont disponibles dans la branche Y 
   externe ou base de données), qui ajoute un peu de latence et un point de défaillance de
   plus à surveiller.
 
-## 2.4 Justification globale
+## 2.4 Modèle LLM de l'agent — Ollama local plutôt qu'une API payante
+
+- **Option retenue :** l'agent appelle un modèle exécuté localement via
+  [Ollama](https://ollama.com) (`llama3.2`, 3B, capable de tool-calling), plutôt qu'une API
+  LLM payante (Claude, GPT, etc.).
+- **Bénéfice principal :** coût nul. C'est un projet étudiant sans budget récurrent — Ollama
+  tourne en local (ou dans son propre conteneur via `docker-compose.yml`), sans clé API ni
+  facturation à l'usage.
+- **Compromis accepté :** un modèle local de 3 milliards de paramètres suit les instructions
+  (rester dans les 4 types de questions supportés, ne jamais inventer de donnée) de façon
+  moins fiable qu'un modèle frontière payant. Ce compromis est jugé acceptable pour un projet
+  de démonstration : le mécanisme de *grounding* (l'agent ne peut répondre qu'avec ce que les
+  outils MCP lui renvoient) reste identique quel que soit le modèle qui l'applique — voir
+  §1.3 et §1.6. L'inférence CPU locale est aussi nettement plus lente qu'une API hébergée —
+  observé en pratique entre 1 et 3 minutes par question avec appels d'outils (deux allers-retours
+  minimum vers le modèle), même modèle déjà chargé en mémoire. Acceptable pour une
+  démonstration (l'interface cliente affiche un indicateur de chargement pendant l'attente),
+  mais pas pour un usage en production à fort trafic.
+
+## 2.5 Justification globale
 
 Ces choix privilégient la **simplicité et l'adéquation au besoin** plutôt que la
 complexité. Le sujet indique explicitement qu'il ne s'agit pas de choisir l'option la plus
 complexe, mais celle qui convient aux exigences du projet et à la capacité de l'équipe.
-REST pour le backoffice et le client couvre tous les besoins obligatoires, tandis que le
-protocole MCP standard assure un couplage faible entre l'agent et ses sources de données.
+REST pour le backoffice et le client couvre tous les besoins obligatoires, le protocole MCP
+standard assure un couplage faible entre l'agent et ses sources de données, et un LLM local
+gratuit couvre le besoin sans engager de coût récurrent pour l'équipe.
 
 ---
 
