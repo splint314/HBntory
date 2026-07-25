@@ -127,7 +127,11 @@ cache product data locally.
 - `seed.py` — creates the admin, sample branches, and sample stock; required before first run.
 - `static/` — the frontend: plain `index.html` + `app.js` + `style.css`, no framework, no
   build step, consumes the REST API via `fetch()`. Deliberately kept to this stack (see
-  `docs/backoffice_ui.md` §1) for auditability.
+  `docs/backoffice_ui.md` §1) for auditability. `app.js` calls **relative** paths
+  (`/api/login`, ...) and relies on the same-origin session cookie — this page only works
+  served by Flask itself (`http://localhost:5000/`), not by a separate static server (e.g.
+  VS Code's Live Server): see `LANCEMENT.md` "Problèmes courants". `client_web/`'s frontend
+  has no such constraint (absolute URL to `ai_service`, open CORS).
 
 ### Product API (`product_api/`)
 

@@ -25,6 +25,11 @@ communication, MVP) :
 | `client_web/` | Page publique statique, sans authentification, qui pose des questions au Service IA | Task 6, fait |
 | Base de données relationnelle | SQLite (fichier partagé, lu en écriture par le Backoffice et en lecture seule par `product_mcp`) | fait |
 
+Task 7 (vérification finale, tests critiques, conteneurisation complète,
+documentation et présentation) est transverse aux six services ci-dessus —
+voir les sections [Tests](#tests-task-7) et
+[Présentation et démonstration](#présentation-et-démonstration) plus bas.
+
 ## Architecture (résumé)
 
 ```
@@ -114,12 +119,15 @@ de dupliquer les données (username unique).
 
 #### Accéder au Backoffice
 
-Interface web : `http://127.0.0.1:5000/` — identifiants `admin` / le mot de
-passe passé à `ADMIN_PASSWORD` lors du `seed.py`. Un admin gère les
-utilisateurs (créer/modifier/soft-delete un utilisateur commun, changer sa
-branche ou son mot de passe) ; un utilisateur commun gère le stock de sa
-seule branche assignée (ajouter/retirer/consulter). Détail des rôles et
-routes : [docs/authentication_and_authorization.md](docs/authentication_and_authorization.md),
+Interface web : `http://127.0.0.1:5000/` (**toujours via Flask, jamais un
+serveur statique séparé type Live Server** — `app.js` utilise des chemins
+relatifs et le cookie de session, voir [docs/backoffice_ui.md](docs/backoffice_ui.md)
+§1) — identifiants `admin` / le mot de passe passé à `ADMIN_PASSWORD` lors
+du `seed.py`. Un admin gère les utilisateurs (créer/modifier/soft-delete un
+utilisateur commun, changer sa branche ou son mot de passe) ; un
+utilisateur commun gère le stock de sa seule branche assignée
+(ajouter/retirer/consulter). Détail des rôles et routes :
+[docs/authentication_and_authorization.md](docs/authentication_and_authorization.md),
 table des routes ci-dessous.
 
 #### Variables d'environnement (Backoffice)
@@ -190,7 +198,7 @@ et cliquer sur "Envoyer" (ou utiliser les exemples affichés sur la page).
 Aucune authentification requise. Questions d'exemple documentées :
 [client_web/README.md](client_web/README.md).
 
-## Tests
+## Tests (Task 7)
 
 - `backoffice/tests/` — suite automatisée `pytest` (auth, autorisation par
   rôle, règles de stock — voir la liste des scénarios ci-dessous) :
@@ -205,7 +213,7 @@ Aucune authentification requise. Questions d'exemple documentées :
   `ai_service/manual_test.py` — scripts de vérification manuelle par
   service (voir leurs README respectifs).
 
-### Scénarios critiques couverts
+### Scénarios critiques couverts (Task 7.2)
 
 | Scénario | Où |
 |---|---|
