@@ -377,6 +377,30 @@ tbody tr:hover { background: var(--surface-sunken); }
 td.actions { display: flex; flex-wrap: wrap; gap: 0.4rem; white-space: normal; }
 td.actions button { padding: 0.3rem 0.65rem; font-size: 0.78rem; border-radius: 999px; }
 
+.role-badge,
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+}
+
+.role-badge[data-role="admin"] { border-color: var(--brand-1); color: var(--brand-1); }
+
+.status-badge::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+.status-badge[data-active="true"] { border-color: var(--brand-teal); color: var(--brand-teal); }
+.status-badge[data-active="false"] { border-color: var(--muted); color: var(--muted); }
+
 /* ---------------------------------------------------------------------
    Status text & banner
    ------------------------------------------------------------------- */
@@ -435,6 +459,37 @@ td.actions button { padding: 0.3rem 0.65rem; font-size: 0.78rem; border-radius: 
   font-size: 0.78rem;
 }
 .site-footer p { margin: 0; }
+
+/* ---------------------------------------------------------------------
+   Modal (replaces native prompt()/confirm() for admin actions)
+   ------------------------------------------------------------------- */
+
+.modal {
+  border: none;
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  width: 90vw;
+  max-width: 380px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-lift);
+}
+
+.modal::backdrop {
+  background: rgba(10, 10, 10, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.modal[open] { animation: fade-in-up var(--med) both; }
+
+.modal-form-inner,
+#modal-form { display: flex; flex-direction: column; gap: 0.85rem; max-width: none; }
+
+#modal-title { margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+
+#modal-body label { max-width: none; }
+
+.modal-actions { justify-content: flex-end; }
 
 /* ---------------------------------------------------------------------
    Motion
