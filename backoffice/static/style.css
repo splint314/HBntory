@@ -78,6 +78,11 @@
 
 * { box-sizing: border-box; }
 
+/* Firefox adds an invisible inner border/padding to buttons that survives
+   box-sizing: border-box, which throws off centered content (e.g. the
+   theme-toggle icon) — reset it explicitly. */
+button::-moz-focus-inner { border: 0; padding: 0; }
+
 html, body { height: 100%; }
 
 body {
@@ -183,11 +188,13 @@ select:focus-visible {
   place-items: center;
   width: 2.2rem;
   height: 2.2rem;
+  padding: 0;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--ink);
   cursor: pointer;
+  line-height: 0;
   transition: background-color var(--fast), border-color var(--fast), transform var(--fast);
 }
 .icon-btn:hover { background: var(--surface-sunken); border-color: var(--border-strong); }
