@@ -42,6 +42,40 @@ Listens on `http://0.0.0.0:5002` by default (`AI_SERVICE_PORT`).
 
 ## API contract
 
+### `GET /api/catalog`
+
+Read-only, grouped by branch — powers `client_web/`'s catalog grid. No
+LLM call, just MCP tool calls (`catalog.py`): `list_branches_tool`, then
+`get_stock_by_branch_tool` per branch, then `get_product_details` per
+distinct SKU found in stock.
+
+Response (200):
+
+```json
+{
+  "branches": [
+    {"name": "Lyon", "items": [
+      {"sku": "HB-LAP-1001", "name": "Holberton Student Laptop 14",
+       "category": "Laptops", "brand": "Holberton", "unit_price": 799.0,
+       "currency": "USD", "quantity": 10}
+    ]}
+  ]
+}
+```
+
+Only products with stock (`quantity > 0`) in a branch appear under that
+branch — same rule the stock tools already apply. Error responses use the
+same `{"error", "message"}` envelope as `/api/ask`; `503 catalog_unavailable`
+covers the same MCP/connectivity failures as `agent_unavailable` below.
+
+**FastMCP return-type wrapping quirk**: tools with a bare (non-object)
+return type — `list_branches_tool() -> list[str]` — come back with
+`structuredContent = {"result": [...]}`, while tools returning a Pydantic
+model (`get_stock_by_branch_tool`, `get_product_details`) come back
+unwrapped. Confirmed empirically, not documented upstream; `catalog.py`
+detects the wrapper by checking `isinstance(..., dict)` before indexing
+`["result"]`.
+
 ### `POST /api/ask`
 
 Request:
@@ -62,6 +96,7 @@ Error responses (all `{"error": "<code>", "message": "<human-readable>"}`):
 |---|---|---|
 | 400 | `bad_request` | `question` missing or empty |
 | 503 | `agent_unavailable` | Ollama is not reachable at `OLLAMA_HOST`, the LLM call failed, the Product MCP server could not be started, or the agent used too many tool calls without reaching an answer |
+| 503 | `catalog_unavailable` (`GET /api/catalog` only) | The Product MCP server could not be started, or a stock/product tool call failed |
 | 500 | `internal_error` | Anything unexpected — caught by a catch-all Flask error handler so a bug here never surfaces as a raw stack trace to the public client page |
 
 `GET /health` → `{"status": "ok"}`.
@@ -196,6 +231,17 @@ POST /api/ask {"question": "test"}   (OLLAMA_HOST pointed at a closed port)
                                       -> 503 {"error":"agent_unavailable","message":"Ollama is not reachable at http://127.0.0.1:1: All connection attempts failed"}
 POST /api/ask {"question": ""}       -> 400 {"error":"bad_request","message":"question is required"}
 GET  /health                          -> 200 {"status":"ok"}
+```
+
+`GET /api/catalog`, verified end-to-end (2026-07-27) via `curl`, real
+data from both branches:
+
+```
+GET /api/catalog -> 200
+{"branches": [
+  {"name": "Lyon",  "items": [HB-MON-2101 x5, HB-KBD-4102 x25, HB-SSD-7101 x15, HB-LAP-1001 x10]},
+  {"name": "Paris", "items": [HB-MON-2101 x12, HB-LAP-1001 x7]}
+]}
 ```
 
 Note on `agent.py`'s exception handling: an error raised while the
