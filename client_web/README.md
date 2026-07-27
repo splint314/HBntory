@@ -20,12 +20,25 @@ python3 -m http.server 5173
 
 Open `http://127.0.0.1:5173/`. The page calls the AI Query Service at
 `http://127.0.0.1:5002` by default; override with `?api=http://host:port` in
-the URL if the service runs elsewhere.
+the URL if the service runs elsewhere. The header's "Se connecter" button
+links to the Backoffice at `http://127.0.0.1:5000` by default; override
+with `?backoffice=http://host:port`.
 
 Requires the AI Query Service (`ai_service/`) running — see
 [ai_service/README.md](../ai_service/README.md).
 
 ## Behavior
+
+### Header
+
+- Theme toggle (sun/moon icon button) flips between light and dark
+  regardless of the system preference, persisted in `localStorage`
+  (`hbntory-theme`) so it survives a reload. Without a manual pick, the
+  page follows `prefers-color-scheme` automatically.
+- "Se connecter" is a plain link to the Backoffice — `client_web` has no
+  authentication of its own (see
+  [docs/architecture_and_planning.md](../docs/architecture_and_planning.md)
+  §2.2), the Backoffice is where admin/common accounts actually log in.
 
 ### Catalog panel
 
@@ -92,6 +105,13 @@ against `ai_service` (2026-07-27, see
 [ai_service/README.md](../ai_service/README.md) for the full response) —
 Lyon (4 products) and Paris (2 products), both with correct per-branch
 quantities.
+
+Header controls verified (2026-07-27): `app.js`/`index.html`/`style.css`
+pass a syntax check (`node --check app.js`) and every id/class the
+scripts and stylesheet reference (`header-inner`, `header-actions`,
+`icon-btn`, `theme-toggle`, `login-link`, `btn-login`, `status-dots`,
+`input-row`) exists in the markup. The Backoffice (`http://127.0.0.1:5000`)
+was confirmed reachable so the "Se connecter" link resolves.
 
 Full-page manual click-through in a real browser (loading state, answer
 rendering, error rendering, catalog filters, card-to-question interaction)

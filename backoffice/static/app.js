@@ -33,6 +33,23 @@ function hide(id) {
 }
 
 // ---------------------------------------------------------------------------
+// Theme toggle (defaults to system preference via CSS; a manual pick is
+// persisted so it survives a reload, see style.css :root[data-theme]).
+// ---------------------------------------------------------------------------
+
+const themeToggle = document.getElementById("theme-toggle");
+const storedTheme = localStorage.getItem("hbntory-theme");
+if (storedTheme) document.documentElement.dataset.theme = storedTheme;
+
+themeToggle.addEventListener("click", () => {
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const current = document.documentElement.dataset.theme || (prefersDark ? "dark" : "light");
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("hbntory-theme", next);
+});
+
+// ---------------------------------------------------------------------------
 // Session / login
 // ---------------------------------------------------------------------------
 
