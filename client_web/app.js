@@ -10,8 +10,33 @@ const AI_SERVICE_URL =
   new URLSearchParams(window.location.search).get("api") ||
   "http://127.0.0.1:5002";
 
+// Backoffice handles all authentication (client_web has none of its own,
+// see docs/architecture_and_planning.md §2.2) — the header button just
+// links there. Override with ?backoffice=http://host:port.
+const BACKOFFICE_URL =
+  new URLSearchParams(window.location.search).get("backoffice") ||
+  "http://127.0.0.1:5000";
+document.getElementById("login-link").href = BACKOFFICE_URL;
+
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
+
+/* -----------------------------------------------------------------------
+ * Theme toggle (defaults to system preference via CSS; a manual pick is
+ * persisted so it survives a reload, see style.css :root[data-theme]).
+ * --------------------------------------------------------------------- */
+
+const themeToggle = document.getElementById("theme-toggle");
+const storedTheme = localStorage.getItem("hbntory-theme");
+if (storedTheme) document.documentElement.dataset.theme = storedTheme;
+
+themeToggle.addEventListener("click", () => {
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const current = document.documentElement.dataset.theme || (prefersDark ? "dark" : "light");
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("hbntory-theme", next);
+});
 
 /* -----------------------------------------------------------------------
  * Ask form (Task 5/6 REST contract: POST /api/ask -> {answer})
@@ -146,13 +171,13 @@ function renderGrid() {
     return;
   }
 
-  catalogGridEl.innerHTML = products.map((item) => {
+  catalogGridEl.innerHTML = products.map((item, index) => {
     const price = formatPrice(item);
     const badges = item.stocks
-      .map((s) => `<span class="stock-badge">${s.branch} · ${s.quantity}</span>`)
+      .map((s) => `<span class="stock-badge" data-level="${stockLevel(s.quantity)}">${s.branch} · ${s.quantity}</span>`)
       .join("");
     return `
-      <button type="button" class="product-card" data-sku="${item.sku}">
+      <button type="button" class="product-card" data-sku="${item.sku}" style="--i:${index}">
         <span class="category">${item.category || item.brand || ""}</span>
         <span class="name">${item.name}</span>
         <span class="sku">${item.sku}</span>
@@ -166,6 +191,14 @@ function renderGrid() {
 
   hide(catalogStatusEl);
   show(catalogGridEl);
+}
+
+// Purely visual (still monochrome — dot fill, not color) — a quick read on
+// how healthy a branch's stock is without adding raw thresholds to the API.
+function stockLevel(quantity) {
+  if (quantity <= 5) return "low";
+  if (quantity <= 15) return "medium";
+  return "high";
 }
 
 branchFilterEl.addEventListener("click", (event) => {
