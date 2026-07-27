@@ -38,7 +38,16 @@ async def get_catalog() -> dict:
     same rule the stock tools already apply.
     """
     async with product_mcp_session() as session:
-        branch_names = await _call(session, "list_branches_tool", {})
+        # FastMCP wraps a bare (non-object) return type — list_branches_tool
+        # returns list[str] — as {"result": [...]} in structuredContent;
+        # object-returning tools (below) come back unwrapped. Confirmed
+        # empirically, not documented in product_mcp/README.md.
+        branches_raw = await _call(session, "list_branches_tool", {})
+        branch_names = (
+            branches_raw["result"]
+            if isinstance(branches_raw, dict)
+            else branches_raw
+        )
 
         stock_by_branch = []
         for name in branch_names:
