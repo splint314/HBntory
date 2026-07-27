@@ -259,6 +259,47 @@ run, at the cost of a larger download and (on slower hardware) higher
 latency. `llama3.2` remains available via `AI_MODEL=llama3.2` for a
 faster but less reliable demo.
 
+### Follow-up retest with `llama3.1:8b` (2026-07-27, later)
+
+A fuller retest of all five example questions surfaced two more findings,
+one fixed, one accepted as an unresolved limitation:
+
+**3. Fixed — product question misread as a branch question.** "As-tu du
+stock pour un produit qui n'existe pas, XYZ-0000 ?" made the model call
+`get_stock_by_branch_tool({'branch_name': 'un'})` — it read the French
+indefinite article "un" as if it were a branch name, instead of
+recognizing the SKU `XYZ-0000` and calling `get_product_details`.
+Grounded (the tool really did error on an unknown branch), but not
+useful. **Mitigation applied:** `SYSTEM_PROMPT` now spells out that
+`branch_name` must be a real branch name (never a word guessed from
+grammar) and explicitly redirects "does this product exist" phrasing to
+`get_product_details` regardless of how the question is worded.
+Retested: fixed, correct answer.
+
+**4. Still unresolved — shopping-list quantity comparison.** Same
+question as before ("5 unités de HB-KBD-4102 et 10 unités de
+HB-MON-2101, quelle branche peut tout fournir ?"), retested against the
+strengthened prompt (explicit "a branch only qualifies if it meets every
+item's quantity" rule added). Result: **still wrong**, and in a new way.
+The model called the right tools first and got the right data (Lyon:
+25 KBD / 5 MON, Paris: 12 MON), but then made several more tool calls
+with garbage arguments — literally `get_stock_by_branch_tool({'branch_name':
+'[branches résultat 1]'})`, a template placeholder passed as a literal
+string instead of a real value — before running low on tool turns and
+answering "Lyon a suffisamment" anyway, still wrong (Lyon only has 5 of
+the 10 units needed).
+
+Two independent prompt-engineering attempts have now failed to fix this
+question type reliably. **Decision: stop iterating on the prompt for
+this case and document it as a known, unresolved limitation** (see
+[README.md](../README.md#limitations-connues)) rather than keep chasing
+it — comparing exact quantities across multiple items is an arithmetic
+task, and prompt wording changes have not made either model reliable at
+it. The most likely real fix would be to have `agent.py` perform the
+quantity comparison itself in Python once it has the tool results,
+rather than asking the LLM to do the arithmetic — not implemented here,
+left as a documented next step rather than an accepted silent gap.
+
 Error paths, also tested directly:
 
 ```

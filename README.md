@@ -326,8 +326,16 @@ Aucune authentification requise. Questions d'exemple documentées :
   comparé quantité demandée vs quantité disponible et conclu à tort
   qu'une branche pouvait tout fournir. Les données restaient réelles (pas
   d'invention), l'erreur est arithmétique/logique, pas un cas d'hallucination
-  de données. Non corrigé à ce jour — voir
-  [ai_service/README.md](ai_service/README.md#tool-selection-reliability-why-the-default-model-changed-2026-07-27).
+  de données. **Deux tentatives de renforcement du prompt système ont
+  échoué à corriger ça de façon fiable** (la deuxième a même vu le modèle
+  appeler un outil avec un placeholder de template au lieu d'une vraie
+  valeur) — décision d'arrêter d'itérer sur le prompt et de documenter la
+  limite plutôt que de continuer à la chasser. La vraie correction
+  probable serait de faire calculer la comparaison de quantités par du
+  code Python dans `agent.py` une fois les données d'outils récupérées,
+  plutôt que de la confier au LLM — pas implémenté, laissé comme piste.
+  Détail complet et logs :
+  [ai_service/README.md](ai_service/README.md#follow-up-retest-with-llama31-8b-2026-07-27-later).
 - Pas de test automatisé du rendu visuel de `client_web` dans un vrai
   navigateur (logique JS vérifiée contre l'API réelle via `curl`).
 - Une seule langue de réponse suivie (celle de la question), pas de
