@@ -15,7 +15,9 @@ import os
 
 from flask import Flask, jsonify, request
 
-from agent import AgentError, answer_question
+from agent import AgentError, _unwrap, answer_question
+from catalog import CatalogError, get_catalog
+from mcp_client import MCPConnectionError
 
 app = Flask(__name__)
 
@@ -37,6 +39,24 @@ def _handle_unexpected_error(e):
 @app.get("/health")
 def health():
     return jsonify(status="ok")
+
+
+@app.get("/api/catalog")
+def catalog():
+    """
+    Read-only product catalog, grouped by branch, for the public client
+    page's catalog view. No question, no LLM call — just the MCP stock +
+    product tools (see catalog.py). Cheap and fast relative to /api/ask.
+    """
+    try:
+        data = asyncio.run(get_catalog())
+    except Exception as exc:
+        real = _unwrap(exc)
+        if isinstance(real, (CatalogError, MCPConnectionError)):
+            return jsonify(error="catalog_unavailable", message=str(real)), 503
+        raise
+
+    return jsonify(data)
 
 
 @app.post("/api/ask")
