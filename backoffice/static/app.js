@@ -50,6 +50,21 @@ themeToggle.addEventListener("click", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Show/hide password
+// ---------------------------------------------------------------------------
+
+document.querySelectorAll(".toggle-password").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const input = document.getElementById(btn.dataset.target);
+    const showing = input.type === "text";
+    input.type = showing ? "password" : "text";
+    btn.classList.toggle("is-visible", !showing);
+    btn.setAttribute("aria-pressed", String(!showing));
+    btn.setAttribute("aria-label", showing ? "Afficher le mot de passe" : "Masquer le mot de passe");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Session / login
 // ---------------------------------------------------------------------------
 
@@ -68,6 +83,7 @@ async function render() {
     hide("admin-view");
     hide("user-info");
     show("login-view");
+    document.getElementById("login-username").focus();
     return;
   }
 
@@ -96,13 +112,19 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
   const username = document.getElementById("login-username").value;
   const password = document.getElementById("login-password").value;
   const errorEl = document.getElementById("login-error");
+  const submitBtn = e.target.querySelector("button[type=submit]");
   errorEl.textContent = "";
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Connexion…";
   try {
     await api("/api/login", { method: "POST", body: JSON.stringify({ username, password }) });
     document.getElementById("login-password").value = "";
     await refreshSession();
   } catch (err) {
     errorEl.textContent = err.message;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Se connecter";
   }
 });
 

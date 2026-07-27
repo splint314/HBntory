@@ -21,6 +21,15 @@
   --header-bg: rgba(255, 255, 255, 0.72);
   --fast: 0.15s ease;
   --med: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Brand accents, lifted from the logo (docs/assets/hbntory-logo.svg) —
+     used sparingly against the monochrome UI: primary actions, focus
+     rings. Absolute values, same in both themes. */
+  --brand-1: #6366f1;
+  --brand-2: #7c3aed;
+  --brand-teal: #2dd4bf;
+  --brand-gradient: linear-gradient(135deg, var(--brand-1), var(--brand-2));
+  --brand-ring: rgba(99, 102, 241, 0.35);
 }
 
 :root[data-theme="dark"] {
@@ -89,9 +98,11 @@ a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid var(--border-strong);
+  outline: 2px solid var(--brand-1);
   outline-offset: 2px;
 }
+
+::selection { background: var(--brand-1); color: #fff; }
 
 /* ---------------------------------------------------------------------
    Header
@@ -106,6 +117,16 @@ select:focus-visible {
   background: var(--header-bg);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+.site-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--brand-gradient);
 }
 
 .header-inner {
@@ -132,7 +153,10 @@ select:focus-visible {
   transition: transform var(--fast);
 }
 
-.brand:hover .brand-mark { transform: rotate(-4deg) scale(1.04); }
+.brand:hover .brand-mark {
+  transform: rotate(-4deg) scale(1.04);
+  filter: drop-shadow(0 6px 14px var(--brand-ring));
+}
 
 .brand-text h1 {
   margin: 0;
@@ -252,8 +276,8 @@ input, select {
 
 input:focus, select:focus {
   outline: none;
-  border-color: var(--border-strong);
-  box-shadow: 0 0 0 3px var(--surface-sunken);
+  border-color: var(--brand-1);
+  box-shadow: 0 0 0 3px var(--brand-ring);
 }
 
 button {
@@ -262,14 +286,15 @@ button {
   font-size: 0.9rem;
   font-weight: 600;
   padding: 0.6rem 1.1rem;
-  border: 1px solid var(--accent);
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  transition: opacity var(--fast), transform var(--fast), background-color var(--fast), color var(--fast), border-color var(--fast);
+  background: var(--brand-gradient);
+  color: #fff;
+  transition: filter var(--fast), transform var(--fast), background-color var(--fast), color var(--fast), border-color var(--fast);
 }
-button:hover { opacity: 0.85; }
+button:hover { filter: brightness(1.1); }
 button:active { transform: scale(0.97); }
+button:disabled { opacity: 0.6; cursor: default; filter: none; }
 
 button.secondary,
 .btn-ghost {
@@ -288,6 +313,36 @@ button.danger {
 button.danger:hover { background: var(--danger-bg); opacity: 1; }
 
 .button-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+.password-field {
+  position: relative;
+  display: flex;
+}
+
+.password-field input { flex: 1; padding-right: 2.5rem; }
+
+.toggle-password {
+  position: absolute;
+  right: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+}
+.toggle-password:hover { background: var(--surface-sunken); filter: none; color: var(--ink); }
+.toggle-password:active { transform: translateY(-50%) scale(0.92); }
+.toggle-password svg { width: 1.05rem; height: 1.05rem; }
+
+.toggle-password .icon-eye-off { display: none; }
+.toggle-password.is-visible .icon-eye { display: none; }
+.toggle-password.is-visible .icon-eye-off { display: block; }
 
 /* ---------------------------------------------------------------------
    Tables

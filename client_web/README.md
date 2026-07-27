@@ -7,7 +7,12 @@ text input, a submit button, and a response area (see
 §2.2 — plain REST, one question per request, no conversation history). No
 framework, no build step — `index.html` + `app.js` + `style.css`, same
 approach as the Backoffice frontend. Monochrome (black & white) design,
-follows the system light/dark theme via `prefers-color-scheme`.
+follows the system light/dark theme via `prefers-color-scheme`, with a
+restrained indigo/violet/teal accent lifted from the logo
+(`docs/assets/hbntory-logo.svg`) applied only to primary actions, focus
+rings, and the stock-level dots — the same accent tokens (`--brand-1`,
+`--brand-2`, `--brand-teal`) are duplicated in `backoffice/static/style.css`
+for a consistent look across both frontends.
 
 ## Run
 
