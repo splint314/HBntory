@@ -67,6 +67,12 @@ Se déconnecter, login `alice`.
 
 ## 4. Interface cliente IA (3-5 min)
 
+Sur `http://localhost:5173/`, montrer d'abord le **catalogue** (panneau de
+gauche) : chargé instantanément via `GET /api/catalog` (pas de LLM), filtre
+par branche (Lyon/Paris), et cliquer une carte produit préremplit la
+question de l'assistant avec son SKU — bon moyen de meubler l'attente avant
+de lancer la question en direct ci-dessous.
+
 ⚠️ **Latence réelle observée : 1 à 3 minutes par question**, même modèle
 déjà chargé — inférence CPU locale (voir
 [docs/architecture_and_planning.md](architecture_and_planning.md) §2.4).

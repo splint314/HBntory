@@ -32,6 +32,88 @@ function hide(id) {
   document.getElementById(id).classList.add("hidden");
 }
 
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+// ---------------------------------------------------------------------------
+// Theme toggle (defaults to system preference via CSS; a manual pick is
+// persisted so it survives a reload, see style.css :root[data-theme]).
+// ---------------------------------------------------------------------------
+
+const themeToggle = document.getElementById("theme-toggle");
+const storedTheme = localStorage.getItem("hbntory-theme");
+if (storedTheme) document.documentElement.dataset.theme = storedTheme;
+
+themeToggle.addEventListener("click", () => {
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const current = document.documentElement.dataset.theme || (prefersDark ? "dark" : "light");
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("hbntory-theme", next);
+});
+
+// ---------------------------------------------------------------------------
+// Show/hide password
+// ---------------------------------------------------------------------------
+
+// Delegated so it also picks up the toggle button the admin modal injects
+// dynamically for the "change password" action (see openModal() below).
+document.addEventListener("click", (event) => {
+  const btn = event.target.closest(".toggle-password");
+  if (!btn) return;
+  const input = document.getElementById(btn.dataset.target);
+  const showing = input.type === "text";
+  input.type = showing ? "password" : "text";
+  btn.classList.toggle("is-visible", !showing);
+  btn.setAttribute("aria-pressed", String(!showing));
+  btn.setAttribute("aria-label", showing ? "Afficher le mot de passe" : "Masquer le mot de passe");
+});
+
+// ---------------------------------------------------------------------------
+// Modal (replaces native prompt()/confirm() for admin actions, see below)
+// ---------------------------------------------------------------------------
+
+const modal = document.getElementById("modal");
+const modalForm = document.getElementById("modal-form");
+const modalTitle = document.getElementById("modal-title");
+const modalBody = document.getElementById("modal-body");
+const modalError = document.getElementById("modal-error");
+const modalConfirmBtn = document.getElementById("modal-confirm-btn");
+
+function openModal({ title, bodyHtml, confirmLabel = "Confirmer", danger = false, onConfirm }) {
+  modalTitle.textContent = title;
+  modalBody.innerHTML = bodyHtml;
+  modalError.textContent = "";
+  modalConfirmBtn.textContent = confirmLabel;
+  modalConfirmBtn.classList.toggle("danger", danger);
+  modal.showModal();
+  modalBody.querySelector("input, select")?.focus();
+
+  modalForm.onsubmit = async (event) => {
+    event.preventDefault();
+    modalConfirmBtn.disabled = true;
+    try {
+      await onConfirm(modalBody);
+      modal.close();
+    } catch (err) {
+      modalError.textContent = err.message;
+    } finally {
+      modalConfirmBtn.disabled = false;
+    }
+  };
+}
+
+document.getElementById("modal-cancel").addEventListener("click", () => modal.close());
+
+// A click that lands on the <dialog> element itself (not its content box)
+// is a click on the ::backdrop — close on it, like the Escape key already does.
+modal.addEventListener("click", (event) => {
+  if (event.target === modal) modal.close();
+});
+
 // ---------------------------------------------------------------------------
 // Session / login
 // ---------------------------------------------------------------------------
@@ -51,6 +133,7 @@ async function render() {
     hide("admin-view");
     hide("user-info");
     show("login-view");
+    document.getElementById("login-username").focus();
     return;
   }
 
@@ -79,13 +162,19 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
   const username = document.getElementById("login-username").value;
   const password = document.getElementById("login-password").value;
   const errorEl = document.getElementById("login-error");
+  const submitBtn = e.target.querySelector("button[type=submit]");
   errorEl.textContent = "";
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Connexion…";
   try {
     await api("/api/login", { method: "POST", body: JSON.stringify({ username, password }) });
     document.getElementById("login-password").value = "";
     await refreshSession();
   } catch (err) {
     errorEl.textContent = err.message;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Se connecter";
   }
 });
 
@@ -222,10 +311,10 @@ async function loadUsers() {
     }
 
     tr.innerHTML = `
-      <td>${user.username}</td>
-      <td>${user.role}</td>
-      <td>${user.branch_id !== null ? branchName(user.branch_id) : "—"}</td>
-      <td>${user.is_active ? "actif" : "supprimé"}</td>
+      <td>${escapeHtml(user.username)}</td>
+      <td><span class="role-badge" data-role="${user.role}">${user.role}</span></td>
+      <td>${user.branch_id !== null ? escapeHtml(branchName(user.branch_id)) : "—"}</td>
+      <td><span class="status-badge" data-active="${user.is_active}">${user.is_active ? "actif" : "supprimé"}</span></td>
     `;
     tr.appendChild(actionsTd);
     tbody.appendChild(tr);
@@ -238,46 +327,70 @@ function reportAdmin(message, ok) {
   el.className = ok ? "success" : "error";
 }
 
-async function changePassword(userId) {
-  const password = prompt("Nouveau mot de passe (8 caractères minimum) :");
-  if (!password) return;
-  try {
-    await api(`/api/users/${userId}/password`, {
-      method: "PATCH",
-      body: JSON.stringify({ password }),
-    });
-    reportAdmin("Mot de passe changé.", true);
-  } catch (err) {
-    reportAdmin(err.message, false);
-  }
+function changePassword(userId) {
+  openModal({
+    title: "Changer le mot de passe",
+    confirmLabel: "Changer",
+    bodyHtml: `
+      <label>Nouveau mot de passe
+        <div class="password-field">
+          <input type="password" id="modal-password" minlength="8" required>
+          <button type="button" class="toggle-password" data-target="modal-password" aria-label="Afficher le mot de passe" aria-pressed="false">
+            <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19M1 1l22 22"/>
+            </svg>
+          </button>
+        </div>
+      </label>
+    `,
+    onConfirm: async (body) => {
+      const password = body.querySelector("#modal-password").value;
+      await api(`/api/users/${userId}/password`, {
+        method: "PATCH",
+        body: JSON.stringify({ password }),
+      });
+      reportAdmin("Mot de passe changé.", true);
+    },
+  });
 }
 
-async function changeBranch(userId, branches) {
-  const names = branches.map((b) => `${b.id}=${b.name}`).join(", ");
-  const input = prompt(`Nouvel identifiant de branche (${names}) :`);
-  const branchId = parseInt(input, 10);
-  if (!input || Number.isNaN(branchId)) return;
-  try {
-    await api(`/api/users/${userId}/branch`, {
-      method: "PATCH",
-      body: JSON.stringify({ branch_id: branchId }),
-    });
-    reportAdmin("Branche changée.", true);
-    await loadUsers();
-  } catch (err) {
-    reportAdmin(err.message, false);
-  }
+function changeBranch(userId, branches) {
+  const options = branches
+    .map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`)
+    .join("");
+  openModal({
+    title: "Changer de branche",
+    confirmLabel: "Changer",
+    bodyHtml: `<label>Nouvelle branche <select id="modal-branch">${options}</select></label>`,
+    onConfirm: async (body) => {
+      const branchId = parseInt(body.querySelector("#modal-branch").value, 10);
+      await api(`/api/users/${userId}/branch`, {
+        method: "PATCH",
+        body: JSON.stringify({ branch_id: branchId }),
+      });
+      reportAdmin("Branche changée.", true);
+      await loadUsers();
+    },
+  });
 }
 
-async function softDeleteUser(userId, username) {
-  if (!confirm(`Supprimer (soft-delete) l'utilisateur "${username}" ?`)) return;
-  try {
-    await api(`/api/users/${userId}`, { method: "DELETE" });
-    reportAdmin("Utilisateur supprimé.", true);
-    await loadUsers();
-  } catch (err) {
-    reportAdmin(err.message, false);
-  }
+function softDeleteUser(userId, username) {
+  openModal({
+    title: "Supprimer l'utilisateur",
+    confirmLabel: "Supprimer",
+    danger: true,
+    bodyHtml: `<p>Confirmer la suppression (soft-delete) de « <strong>${escapeHtml(username)}</strong> » ?
+      Ce compte sera désactivé mais conservé pour l'historique.</p>`,
+    onConfirm: async () => {
+      await api(`/api/users/${userId}`, { method: "DELETE" });
+      reportAdmin("Utilisateur supprimé.", true);
+      await loadUsers();
+    },
+  });
 }
 
 document.getElementById("create-user-form").addEventListener("submit", async (e) => {

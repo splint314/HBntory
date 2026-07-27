@@ -3,48 +3,112 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HBntory — Assistant produits</title>
+  <title>HBntory — Catalogue &amp; assistant</title>
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>HBntory</h1>
-    <span class="subtitle">Assistant produits et stock</span>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <img class="brand-mark" src="logo.svg" alt="" aria-hidden="true">
+        <div class="brand-text">
+          <h1>HBntory</h1>
+          <p class="tagline">Catalogue produits &amp; disponibilité en stock</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button type="button" id="theme-toggle" class="icon-btn" aria-label="Changer de thème">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/>
+          </svg>
+        </button>
+
+        <a id="login-link" class="btn-login" href="#" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+            <path d="M10 17l5-5-5-5"/>
+            <path d="M15 12H3"/>
+          </svg>
+          Se connecter
+        </a>
+      </div>
+    </div>
   </header>
 
   <main>
-    <p class="intro">
-      Posez une question sur le catalogue de produits ou la disponibilité en
-      stock. Aucune connexion requise.
-    </p>
+    <section class="panel catalog" aria-labelledby="catalog-heading">
+      <div class="panel-head">
+        <h2 id="catalog-heading">Catalogue</h2>
+        <div id="branch-filter" class="branch-filter" role="tablist" aria-label="Filtrer par branche">
+          <button type="button" class="filter-btn active" data-branch="all" role="tab" aria-selected="true">
+            Toutes les branches
+          </button>
+        </div>
+      </div>
 
-    <form id="ask-form">
-      <label for="question">Votre question</label>
-      <input
-        type="text"
-        id="question"
-        name="question"
-        placeholder="Ex : quelles branches ont du stock du produit HB-LAP-1001 ?"
-        autocomplete="off"
-        required
-      >
-      <button type="submit" id="submit-btn">Envoyer</button>
-    </form>
+      <p id="catalog-status" class="status">
+        <span class="status-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        Chargement du catalogue…
+      </p>
+      <div id="catalog-grid" class="catalog-grid hidden"></div>
+    </section>
 
-    <div id="loading" class="hidden">Recherche en cours…</div>
-    <div id="error" class="hidden" role="alert"></div>
-    <div id="answer" class="hidden"></div>
+    <section class="panel assistant" aria-labelledby="assistant-heading">
+      <h2 id="assistant-heading">Assistant produits</h2>
+      <p class="assistant-intro">
+        Posez une question sur le catalogue ou la disponibilité en stock.
+        Aucune connexion requise.
+      </p>
 
-    <section id="examples">
-      <h2>Exemples de questions</h2>
-      <ul>
-        <li>Quels sont les détails du produit HB-LAP-1001 ?</li>
-        <li>Quelles branches ont du stock du produit HB-KBD-4102 ?</li>
-        <li>Quels produits sont disponibles dans la branche Lyon ?</li>
-        <li>Je veux équiper un poste de travail complet, que recommandes-tu ?</li>
-      </ul>
+      <form id="ask-form">
+        <label for="question">Votre question</label>
+        <div class="input-row">
+          <input
+            type="text"
+            id="question"
+            name="question"
+            placeholder="Ex : quelles branches ont du stock du produit HB-LAP-1001 ?"
+            autocomplete="off"
+            required
+          >
+          <button type="submit" id="submit-btn">
+            <span>Envoyer</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14"/>
+              <path d="M13 6l6 6-6 6"/>
+            </svg>
+          </button>
+        </div>
+      </form>
+
+      <div id="loading" class="hidden" aria-live="polite">
+        <span class="status-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        Recherche en cours…
+      </div>
+      <div id="error" class="hidden" role="alert"></div>
+      <div id="answer" class="hidden" aria-live="polite"></div>
+
+      <div class="examples">
+        <h3>Exemples de questions</h3>
+        <ul id="example-list">
+          <li>Quels sont les détails du produit HB-LAP-1001 ?</li>
+          <li>Quelles branches ont du stock du produit HB-KBD-4102 ?</li>
+          <li>Quels produits sont disponibles dans la branche Lyon ?</li>
+          <li>Je veux équiper un poste de travail complet, que recommandes-tu ?</li>
+        </ul>
+      </div>
     </section>
   </main>
+
+  <footer class="site-footer">
+    <p>HBntory — projet Holberton. Données de démonstration, aucune vente réelle.</p>
+  </footer>
 
   <script src="app.js"></script>
 </body>
