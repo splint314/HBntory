@@ -27,5 +27,52 @@ services:
       - "5000:5000"
     restart: unless-stopped
 
+  # No API key, no per-token cost (student project, no budget for a paid
+  # LLM API — see docs/architecture_and_planning.md §2.4). Pull a model
+  # once after the first `docker compose up`:
+  #   docker compose exec ollama ollama pull llama3.2
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hbntory-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai_service/Dockerfile
+    container_name: hbntory-ai-service
+    depends_on:
+      - external-products-api
+      - backoffice
+      - ollama
+    environment:
+      # DNS name on the Compose network — the ollama service above.
+      OLLAMA_HOST: "http://ollama:11434"
+      AI_MODEL: "llama3.2"
+      PRODUCT_API_URL: "http://external-products-api:5000"
+      # Same SQLite file as the Backoffice, mounted read-only below: the
+      # MCP stock tools open it with mode=ro regardless, this is
+      # defense-in-depth at the container level too.
+      DATABASE_URL: "sqlite:////data/hbntory.db"
+    volumes:
+      - backoffice_data:/data:ro
+    ports:
+      - "5002:5002"
+    restart: unless-stopped
+
+  client-web:
+    build: ./client_web
+    container_name: hbntory-client-web
+    depends_on:
+      - ai-service
+    ports:
+      - "5173:5173"
+    restart: unless-stopped
+
 volumes:
   backoffice_data:
+  ollama_data:

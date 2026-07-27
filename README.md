@@ -1,83 +1,150 @@
 # HBntory
 
 Système de gestion de stock multi-branches pour une entreprise de vente au
-détail fictive (projet Holberton).
+détail fictive (projet Holberton), avec un agent IA capable de répondre à
+des questions sur le catalogue produit et la disponibilité en stock.
 
-Voir [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
-pour l'architecture complète du système (services, flux de données,
-stratégies de communication, MVP).
+## Équipe
 
-## État du projet
+- Kevin Rigal — krigal323@gmail.com
+- Panaki Gillot — gillotpanaki@gmail.com
 
-| Composant | État |
-|---|---|
-| `backoffice/` | Task 0-3 : modèles, base de données, API REST, authentification/autorisation, interface web (stock + gestion utilisateurs) |
-| `product_api/` | API Produit externe fournie (vendored depuis [hbntory-products-api](https://github.com/hbtn-edu/hbntory-products-api)), lecture seule, non modifiée |
-| Serveur MCP Produit, Service IA, Interface client (public) | Pas encore commencés |
+## Vue d'ensemble du projet
 
-## Tout lancer avec Docker Compose
+Le système est composé de six services indépendants (voir
+[docs/architecture_and_planning.md](docs/architecture_and_planning.md) pour
+le détail complet — architecture, flux de données, stratégies de
+communication, MVP) :
+
+| Service | Rôle | État |
+|---|---|---|
+| `backoffice/` | API REST + interface web interne : gestion des utilisateurs (admin) et du stock (utilisateurs communs) | Task 0-3, fait |
+| `product_api/` | Catalogue fournisseur externe, vendored, lecture seule, non modifié | fourni |
+| `product_mcp/` | Serveur MCP : outils produit (catalogue) + stock (lecture seule de la DB Backoffice) pour l'agent IA | Task 4-5, fait |
+| `ai_service/` | Service IA : reçoit une question, l'agent (LLM local via Ollama, tool-use) appelle le serveur MCP, renvoie une réponse | Task 5, fait |
+| `client_web/` | Page publique statique, sans authentification, qui pose des questions au Service IA | Task 6, fait |
+| Base de données relationnelle | SQLite (fichier partagé, lu en écriture par le Backoffice et en lecture seule par `product_mcp`) | fait |
+
+Task 7 (vérification finale, tests critiques, conteneurisation complète,
+documentation et présentation) est transverse aux six services ci-dessus —
+voir les sections [Tests](#tests-task-7) et
+[Présentation et démonstration](#présentation-et-démonstration) plus bas.
+
+## Architecture (résumé)
+
+```
+client_web  --REST-->  ai_service  --MCP (stdio)-->  product_mcp  --HTTP-->  product_api
+                                                            \--SQLite (mode=ro)--> hbntory.db
+backoffice  <--SQLAlchemy-->  hbntory.db
+backoffice  --HTTP-->  product_api
+```
+
+- Le **Backoffice** est la seule voie d'écriture sur la base de données
+  (utilisateurs, branches, stock). Il n'y stocke jamais de données produit
+  (nom, prix, description) — uniquement le `sku`, tout le reste vient de
+  l'API Produit à la demande.
+- Le **serveur MCP** est le seul point d'accès de l'agent IA aux données
+  produit et stock ; il n'écrit jamais dans la base (connexion SQLite en
+  `mode=ro`) et n'a aucune notion d'authentification (il ne fait que lire).
+- Le **Service IA** ne connaît ni la base de données ni l'API Produit
+  directement : tout passe par le serveur MCP, en client MCP standard.
+- L'**interface cliente** est anonyme et ne parle qu'au Service IA, jamais
+  directement au Backoffice ni à la base.
+
+Détails par service : [docs/database_design.md](docs/database_design.md),
+[docs/authentication_and_authorization.md](docs/authentication_and_authorization.md),
+[docs/backoffice_ui.md](docs/backoffice_ui.md),
+[product_mcp/README.md](product_mcp/README.md),
+[ai_service/README.md](ai_service/README.md),
+[client_web/README.md](client_web/README.md).
+
+## Installation et lancement
+
+Détail complet ci-dessous ; dépannage rapide dans
+[Problèmes courants](#problèmes-courants).
+
+### Option A — Docker Compose (les cinq services)
 
 ```bash
 docker compose up --build
+
+# Une fois démarré, récupérer le modèle local (une seule fois, persisté
+# dans le volume ollama_data — pas besoin de le refaire au prochain lancement) :
+docker compose exec ollama ollama pull llama3.2
 ```
 
-Démarre l'API Produit externe (`http://localhost:5001`) puis le Backoffice
-(`http://localhost:5000`), avec un admin déjà seedé
-(`admin` / `ChangeMe123!`, à changer via la variable `ADMIN_PASSWORD` du
-`docker-compose.yml`). Les données du Backoffice sont persistées dans le
-volume nommé `backoffice_data`.
+Démarre, dans l'ordre des dépendances : l'API Produit externe
+(`http://localhost:5001`), le Backoffice (`http://localhost:5000`, admin
+déjà seedé `admin` / `ChangeMe123!`, à changer via `ADMIN_PASSWORD` dans
+`docker-compose.yml`), **Ollama** (`http://localhost:11434`, le LLM local
+qui sert l'agent — voir §2.4 de
+[docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+pour la justification de ce choix plutôt qu'une API payante), le Service
+IA (`http://localhost:5002`) et l'interface cliente
+(`http://localhost:5173`). Les données du Backoffice sont persistées dans
+le volume nommé `backoffice_data`, monté en lecture seule dans le
+conteneur `ai-service` pour les outils de stock du serveur MCP (celui-ci
+n'a pas de conteneur propre : il n'a pas de port HTTP, il est lancé comme
+sous-processus par `ai_service`, voir
+[product_mcp/README.md](product_mcp/README.md)). Tant que le modèle n'est
+pas récupéré via `ollama pull`, `/api/ask` répond 503 au lieu de donner
+une vraie réponse — tout le reste fonctionne sans attendre.
 
-## Backoffice — démarrage rapide (sans Docker)
+### Option B — Chaque service manuellement
 
-```bash
-cd backoffice
-
-# 1. Environnement virtuel + dépendances
-python3 -m venv ../.venv
-../.venv/bin/pip install -r requirements.txt
-
-# 2. Initialiser la base de données (admin, 2 branches, stock d'exemple)
-ADMIN_PASSWORD="unMotDePasseSolide" ../.venv/bin/python seed.py
-
-# 3. Lancer l'API
-SECRET_KEY="change-me-in-production" ../.venv/bin/python app.py
-```
-
-L'interface web est servie sur `http://127.0.0.1:5000/` (identifiants de
-démo : `admin` / le mot de passe passé à `seed.py`). Elle consomme l'API
-REST du même service — voir
-[docs/database_design.md](docs/database_design.md),
-[docs/authentication_and_authorization.md](docs/authentication_and_authorization.md)
-et [docs/backoffice_ui.md](docs/backoffice_ui.md) pour le détail du schéma,
-de la stratégie d'authentification et de l'approche UI/backend.
-
-### API Produit externe — sans Docker
-
-`product_api/app.py` ne dépend d'aucune librairie tierce (uniquement la
-stdlib Python), donc si Docker n'est pas disponible elle peut tourner
-directement :
+#### 1. API Produit externe
 
 ```bash
 cd product_api
 HBN_PRODUCTS_PORT=5001 python3 app.py
 ```
 
-Puis lancer le Backoffice avec `PRODUCT_API_URL=http://127.0.0.1:5001` (au
-lieu du nom de service Docker `external-products-api`). Voir
-[product_api/README.md](product_api/README.md) et
-[product_api/docs/api_contract.md](product_api/docs/api_contract.md) pour le
-contrat complet (endpoints, `simulate_delay_ms`, `force_error`).
+Aucune dépendance tierce (stdlib uniquement). Vérifier :
+`curl http://127.0.0.1:5001/health`. Contrat complet :
+[product_api/README.md](product_api/README.md),
+[product_api/docs/api_contract.md](product_api/docs/api_contract.md).
 
-### Variables d'environnement
+#### 2. Backoffice — initialiser la base de données et lancer l'API
+
+```bash
+cd backoffice
+python3 -m venv ../.venv
+../.venv/bin/pip install -r requirements.txt
+
+# Initialise la base : admin, 2 branches (Lyon, Paris), stock d'exemple
+ADMIN_PASSWORD="unMotDePasseSolide" ../.venv/bin/python seed.py
+
+SECRET_KEY="change-me-in-production" PRODUCT_API_URL="http://127.0.0.1:5001" ../.venv/bin/python app.py
+```
+
+`seed.py` doit tourner avant le premier lancement (il crée la base
+`hbntory.db` si elle n'existe pas). Le réexécuter est sans danger tant que
+la base n'existe pas déjà — sur une base existante il échouera plutôt que
+de dupliquer les données (username unique).
+
+#### Accéder au Backoffice
+
+Interface web : `http://127.0.0.1:5000/` (**toujours via Flask, jamais un
+serveur statique séparé type Live Server** — `app.js` utilise des chemins
+relatifs et le cookie de session, voir [docs/backoffice_ui.md](docs/backoffice_ui.md)
+§1) — identifiants `admin` / le mot de passe passé à `ADMIN_PASSWORD` lors
+du `seed.py`. Un admin gère les utilisateurs (créer/modifier/soft-delete un
+utilisateur commun, changer sa branche ou son mot de passe) ; un
+utilisateur commun gère le stock de sa seule branche assignée
+(ajouter/retirer/consulter). Détail des rôles et routes :
+[docs/authentication_and_authorization.md](docs/authentication_and_authorization.md),
+table des routes ci-dessous.
+
+#### Variables d'environnement (Backoffice)
 
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `DATABASE_URL` | URL de connexion SQLAlchemy | `sqlite:///hbntory.db` |
-| `ADMIN_PASSWORD` | Mot de passe en clair de l'admin, utilisé une seule fois par `seed.py` pour générer le hash Argon2id | *(obligatoire, aucun défaut)* |
+| `ADMIN_PASSWORD` | Mot de passe en clair de l'admin, utilisé une seule fois par `seed.py` | *(obligatoire, aucun défaut)* |
 | `SECRET_KEY` | Clé de signature des cookies de session Flask | valeur aléatoire (dev uniquement) |
-| `PRODUCT_API_URL` | URL de l'API Produit externe (conteneur Docker) | `http://localhost:5001` |
+| `PRODUCT_API_URL` | URL de l'API Produit externe | `http://localhost:5001` |
 
-### Principales routes de l'API
+#### Principales routes de l'API Backoffice
 
 | Méthode | Route | Rôle requis | Description |
 |---|---|---|---|
@@ -97,3 +164,168 @@ contrat complet (endpoints, `simulate_delay_ms`, `force_error`).
 | POST | `/api/stock/remove` | common | Retirer du stock de sa branche |
 | GET | `/api/products?q=&limit=` | authentifié | Proxy lecture seule vers l'API Produit (liste/recherche) |
 | GET | `/api/products/<sku>` | authentifié | Proxy lecture seule vers l'API Produit (détail) |
+
+#### 3. Serveur MCP Produit + Stock
+
+N'a pas de port HTTP : c'est un serveur MCP en stdio, lancé comme
+sous-processus (par `ai_service` ou par son propre script de test).
+
+```bash
+cd product_mcp
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+PRODUCT_API_URL=http://127.0.0.1:5001 DATABASE_URL="sqlite:///../backoffice/hbntory.db" .venv/bin/python manual_test.py
+```
+
+Liste des outils et tests manuels : [product_mcp/README.md](product_mcp/README.md).
+
+#### 4. Service IA
+
+Nécessite [Ollama](https://ollama.com/download) installé sur la machine
+(pas requis avec l'Option A Docker, où il tourne dans son propre
+conteneur).
+
+```bash
+ollama pull llama3.2   # une seule fois — LLM local, gratuit, voir ai_service/README.md
+
+cd ai_service
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env
+.venv/bin/python app.py   # http://localhost:5002
+```
+
+Contrat REST (`POST /api/ask`), types de questions supportés, gestion
+d'erreurs, observabilité des appels d'outils :
+[ai_service/README.md](ai_service/README.md).
+
+#### Variables d'environnement (Service IA)
+
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `OLLAMA_HOST` | URL du serveur Ollama local | `http://localhost:11434` |
+| `AI_MODEL` | Modèle Ollama utilisé par l'agent | `llama3.2` |
+| `AI_SERVICE_PORT` | Port d'écoute du service | `5002` |
+| `PRODUCT_API_URL` | URL de l'API Produit (transmise au serveur MCP) | `http://localhost:5001` |
+| `DATABASE_URL` | URL de la DB SQLite (transmise au serveur MCP, lecture seule) | `sqlite:///../backoffice/hbntory.db` |
+
+#### 5. Interface cliente (utiliser le Client Web Interface)
+
+```bash
+cd client_web
+python3 -m http.server 5173   # http://localhost:5173
+```
+
+Ouvrir `http://localhost:5173/`, taper une question dans le champ de texte
+et cliquer sur "Envoyer" (ou utiliser les exemples affichés sur la page).
+Aucune authentification requise. Questions d'exemple documentées :
+[client_web/README.md](client_web/README.md).
+
+## Tests (Task 7)
+
+- `backoffice/tests/` — suite automatisée `pytest` (auth, autorisation par
+  rôle, règles de stock — voir la liste des scénarios ci-dessous) :
+
+  ```bash
+  cd backoffice
+  ../.venv/bin/pip install -r requirements-dev.txt
+  ../.venv/bin/python -m pytest tests/ -v
+  ```
+
+- `backoffice/manual_test.py`, `product_mcp/manual_test.py`,
+  `ai_service/manual_test.py` — scripts de vérification manuelle par
+  service (voir leurs README respectifs).
+
+### Scénarios critiques couverts (Task 7.2)
+
+| Scénario | Où |
+|---|---|
+| Utilisateur commun ajoute du stock valide | `tests/test_api_stock.py` |
+| Utilisateur commun retire du stock valide | `tests/test_api_stock.py` |
+| Ne peut pas retirer plus que le stock disponible | `tests/test_api_stock.py`, `tests/test_stock_rules.py` |
+| Ne peut pas opérer sur une autre branche | `tests/test_api_stock.py` |
+| Admin peut créer un utilisateur commun | `tests/test_api_auth.py` |
+| Admin peut soft-delete un utilisateur | `tests/test_api_auth.py` |
+| Utilisateur supprimé ne peut plus se connecter | `tests/test_api_auth.py` |
+| Admin ne peut pas gérer le stock | `tests/test_api_stock.py` |
+| Détails produit obtenus depuis l'API externe | `product_mcp/README.md` (test manuel) |
+| L'IA répond où un produit est disponible | `ai_service/README.md` (vérifié en direct, réponse correcte) |
+| L'IA répond quels produits sont disponibles dans une branche | `ai_service/README.md` (vérifié en direct — un essai a dépassé le délai à cause d'un détour du modèle, correctement renvoyé en 503 plutôt qu'un crash) |
+| L'IA répond clairement pour un produit inconnu | `ai_service/README.md` (vérifié en direct, réponse correcte) |
+| L'IA répond clairement quand l'information est indisponible | idem |
+
+## Principales décisions techniques
+
+- **REST** pour le Backoffice et l'interface cliente (pas de SSR, pas de
+  WebSocket) : chaque question/action est indépendante, pas d'historique de
+  conversation requis — REST est suffisant et plus simple à déboguer.
+- **MCP standard** entre le Service IA et les données produit/stock plutôt
+  qu'un accès direct : découple totalement l'agent de ses sources de
+  données (l'un peut évoluer sans l'autre).
+- **Extension du serveur MCP existant pour le stock** plutôt qu'un second
+  serveur MCP ou une API interne dédiée : un seul point d'accès en lecture
+  seule (`mode=ro` SQLite) pour tout ce que l'agent peut voir.
+- **SQLite partagé** entre le Backoffice (lecture/écriture via SQLAlchemy)
+  et `product_mcp` (lecture seule via `sqlite3`, `mode=ro`) : évite de
+  dupliquer les données de stock, au prix d'un couplage sur le format du
+  fichier plutôt qu'une vraie API interne.
+- **Système de prompt restrictif** dans l'agent (4 types de questions
+  supportés, tout le reste explicitement refusé) plutôt qu'un agent
+  généraliste : réponses prévisibles, jamais de données inventées.
+- **LLM local (Ollama) plutôt qu'une API payante** : projet étudiant sans
+  budget récurrent — voir
+  [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+  §2.4 pour le compromis accepté (un petit modèle local suit les
+  instructions de manière moins fiable qu'un modèle frontière payant).
+- **Frontend sans framework** (Backoffice et client) : HTML/CSS/JS simple,
+  cohérent avec la simplicité demandée par le sujet, pas de build step.
+
+## Problèmes courants
+
+- **`/api/ask` répond 503 "agent_unavailable"** : Ollama n'a pas encore le
+  modèle — `ollama pull llama3.2` (ou `docker compose exec ollama ollama
+  pull llama3.2` en Docker), voir §2.4 de
+  [docs/architecture_and_planning.md](docs/architecture_and_planning.md).
+- **"invalid credentials" dans l'UI du Backoffice alors que l'API répond
+  OK en `curl`** : autofill du navigateur avec un mauvais mot de passe —
+  vider le champ et le retaper.
+- **Backoffice ouvert avec l'extension VS Code "Live Server" (ou tout
+  autre serveur statique) sur `backoffice/static/index.html` : rien ne
+  fonctionne (login, stock...)** : attendu, voir
+  [docs/backoffice_ui.md](docs/backoffice_ui.md) §1 — ouvrir directement
+  `http://localhost:5000/`, jamais le fichier via Live Server.
+  `client_web/` n'a pas cette contrainte (URL absolue, CORS ouvert).
+- **Docker introuvable sous WSL** : activer l'intégration WSL dans Docker
+  Desktop, ou utiliser l'Option B (sans Docker) ci-dessus.
+- **`.venv` corrompu (permission denied sur `pip`/`python`)** : le
+  recréer (`rm -rf .venv && python3 -m venv .venv && ...`), il n'est pas
+  versionné.
+
+## Limitations connues
+
+- Le lien Backoffice ↔ `product_mcp` se fait via le fichier SQLite partagé
+  (chemin relatif) plutôt qu'un vrai contrat d'API interne — fonctionne en
+  local, fragile si les deux services tournent sur des machines séparées.
+- **Latence de l'agent IA** : 1 à 3 minutes par question en pratique
+  (inférence CPU locale via Ollama, modèle déjà chargé) — acceptable pour
+  une démonstration mais pas pour de la production. Voir
+  [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+  §2.4 et [ai_service/README.md](ai_service/README.md) pour le détail des
+  tests effectués (boucle complète vérifiée de bout en bout, réponses
+  correctement fondées sur les données réelles de l'API Produit et du
+  stock).
+- Pas de test automatisé du rendu visuel de `client_web` dans un vrai
+  navigateur (logique JS vérifiée contre l'API réelle via `curl`).
+- Une seule langue de réponse suivie (celle de la question), pas de
+  détection de langue robuste au-delà de l'instruction donnée au modèle.
+
+## Présentation et démonstration
+
+Déroulé suggéré pour la soutenance, avec les données seedées :
+[docs/demo_script.md](docs/demo_script.md).
+
+## Fonctionnalités optionnelles implémentées
+
+Aucune des fonctionnalités listées comme optionnelles dans le sujet
+(streaming WebSocket, historique de conversation, agent multi-étapes,
+tests de bout en bout complets) n'a été implémentée — voir
+[docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+§3.3 pour la liste et la justification du choix de rester sur le MVP.

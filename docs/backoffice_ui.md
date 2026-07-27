@@ -29,6 +29,13 @@ la consomme via `fetch()`, sans framework ni étape de build.
   manuellement — le cookie de session (Task 2) est envoyé automatiquement
   par le navigateur sur chaque `fetch()` (`credentials: "include"`).
 
+**Conséquence pratique** : `app.js` appelle des chemins relatifs
+(`/api/login`, ...), donc cette page ne peut **pas** être ouverte via un
+serveur statique séparé (l'extension VS Code "Live Server", `python -m
+http.server` sur un autre port, etc.) — elle doit être servie par Flask
+lui-même, à `http://localhost:5000/`. Voir
+[README.md](../README.md#problèmes-courants) pour ce cas précis.
+
 ## 2. Opérations de stock (utilisateur commun)
 
 Implémentées dans `static/app.js` (`loadStock`, `submitStockChange`,
