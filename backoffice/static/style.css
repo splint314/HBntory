@@ -125,18 +125,14 @@ select:focus-visible {
 }
 
 .brand-mark {
-  display: grid;
-  place-items: center;
   width: 2.5rem;
   height: 2.5rem;
   flex: none;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
+  display: block;
+  transition: transform var(--fast);
 }
+
+.brand:hover .brand-mark { transform: rotate(-4deg) scale(1.04); }
 
 .brand-text h1 {
   margin: 0;
