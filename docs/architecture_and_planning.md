@@ -123,21 +123,41 @@ stock du produit X ? » ou « quels produits sont disponibles dans la branche Y 
 ## 2.4 Modèle LLM de l'agent — Ollama local plutôt qu'une API payante
 
 - **Option retenue :** l'agent appelle un modèle exécuté localement via
-  [Ollama](https://ollama.com) (`llama3.2`, 3B, capable de tool-calling), plutôt qu'une API
-  LLM payante (Claude, GPT, etc.).
+  [Ollama](https://ollama.com) (`llama3.1:8b` par défaut, capable de tool-calling), plutôt
+  qu'une API LLM payante (Claude, GPT, etc.). `AI_MODEL=llama3.2` (3B) reste disponible comme
+  alternative plus rapide mais moins fiable — voir plus bas pourquoi ce n'est pas le choix par
+  défaut.
 - **Bénéfice principal :** coût nul. C'est un projet étudiant sans budget récurrent — Ollama
   tourne en local (ou dans son propre conteneur via `docker-compose.yml`), sans clé API ni
   facturation à l'usage.
-- **Compromis accepté :** un modèle local de 3 milliards de paramètres suit les instructions
-  (rester dans les 4 types de questions supportés, ne jamais inventer de donnée) de façon
-  moins fiable qu'un modèle frontière payant. Ce compromis est jugé acceptable pour un projet
-  de démonstration : le mécanisme de *grounding* (l'agent ne peut répondre qu'avec ce que les
+- **Compromis accepté :** un modèle local suit les instructions (rester dans les 4 types de
+  questions supportés, ne jamais inventer de donnée, choisir le bon outil) de façon moins
+  fiable qu'un modèle frontière payant. Ce compromis est jugé acceptable pour un projet de
+  démonstration : le mécanisme de *grounding* (l'agent ne peut répondre qu'avec ce que les
   outils MCP lui renvoient) reste identique quel que soit le modèle qui l'applique — voir
-  §1.3 et §1.6. L'inférence CPU locale est aussi nettement plus lente qu'une API hébergée —
-  observé en pratique entre 1 et 3 minutes par question avec appels d'outils (deux allers-retours
-  minimum vers le modèle), même modèle déjà chargé en mémoire. Acceptable pour une
-  démonstration (l'interface cliente affiche un indicateur de chargement pendant l'attente),
-  mais pas pour un usage en production à fort trafic.
+  §1.3 et §1.6. L'inférence CPU locale est aussi plus lente qu'une API hébergée — observé
+  entre quelques secondes et plusieurs minutes par question selon la machine, même modèle
+  déjà chargé en mémoire. Acceptable pour une démonstration (l'interface cliente affiche un
+  indicateur de chargement pendant l'attente), mais pas pour un usage en production à fort
+  trafic.
+- **Deux défaillances concrètes observées** (détail et logs dans
+  [ai_service/README.md](../ai_service/README.md)), qui ont motivé le choix du modèle par
+  défaut plutôt que de rester purement théorique sur le compromis :
+  1. Avec `llama3.2` (3B) : pour « quels produits sont disponibles dans la branche Lyon ? »,
+     l'agent a appelé `list_products_tool` (tout le catalogue, sans filtre de branche) au lieu
+     de `get_stock_by_branch_tool`, puis présenté le catalogue entier comme le stock de cette
+     branche — une vraie erreur de *grounding* (donnée réelle, mais mauvais outil). Un
+     correctif (descriptions d'outils plus explicites dans `product_mcp/server.py`) a corrigé
+     le cas testé, mais pas de façon garantie : un nouveau test sur une autre branche a encore
+     échoué différemment.
+  2. Avec `llama3.1:8b` : le choix d'outil est resté correct dans tous nos essais, mais une
+     question de type liste de courses multi-produits a révélé une erreur de comparaison de
+     quantités (le modèle a lu la bonne donnée — 5 unités disponibles pour 10 demandées — mais
+     a conclu à tort que la branche pouvait tout fournir).
+  Aucun des deux modèles n'élimine complètement le risque d'erreur ; `llama3.1:8b` a été
+  retenu par défaut car nettement plus fiable sur le choix d'outil (le problème le plus
+  visible et le plus proche d'une invention de donnée), au prix d'un téléchargement plus
+  lourd et d'une latence un peu plus élevée sur du matériel modeste.
 
 ## 2.5 Justification globale
 

@@ -11,7 +11,7 @@
 
 ```bash
 docker compose up --build
-docker compose exec ollama ollama pull llama3.2   # une seule fois
+docker compose exec ollama ollama pull llama3.1:8b   # une seule fois
 ```
 
 Vérifier que les 4 services répondent :
@@ -134,7 +134,7 @@ Questions (déjà listées sur la page et dans
 
 - `ai_service` répond 503 si Ollama n'a pas encore reçu le modèle —
   vérifier avec `docker compose exec ollama ollama list`, relancer
-  `docker compose exec ollama ollama pull llama3.2` si absent.
+  `docker compose exec ollama ollama pull llama3.1:8b` si absent.
 - Si `docker compose` n'est pas disponible sur la machine de démo, utiliser
   l'Option B (sans Docker) de [README.md](../README.md#installation-et-lancement)
   — chaque service se lance indépendamment avec les mêmes identifiants.

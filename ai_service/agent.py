@@ -5,10 +5,11 @@ local Ollama model's tool-calling to call the Product MCP server's tools
 
 Runs against a local Ollama server (http://localhost:11434 by default)
 instead of a paid hosted API — chosen so the project has zero ongoing
-cost. Trade-off: a small local model (llama3.2, 3B) follows the "never
-invent data" / scope-limiting instructions less reliably than a frontier
-model — see docs/architecture_and_planning.md §2.4 for the full
-justification.
+cost. Trade-off: a local model follows the "never invent data" /
+scope-limiting instructions less reliably than a frontier model. Default
+is llama3.1:8b (AI_MODEL=llama3.2 for the smaller/faster 3B model instead)
+— see docs/architecture_and_planning.md §2.4 for the full justification
+and the concrete failure modes observed with each.
 
 One call to answer_question() = one independent question, no conversation
 history kept across requests (matches the "no history required" choice in
@@ -24,7 +25,7 @@ import httpx
 from mcp_client import MCPConnectionError, product_mcp_session
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-MODEL = os.getenv("AI_MODEL", "llama3.2")
+MODEL = os.getenv("AI_MODEL", "llama3.1:8b")
 MAX_TOOL_TURNS = 8
 # Local CPU inference is much slower than a hosted API, and Ollama unloads
 # an idle model from memory after a few minutes — the first request after
@@ -39,13 +40,25 @@ logger = logging.getLogger("hbntory.agent")
 # last rule in SYSTEM_PROMPT and ai_service/README.md for the full list.
 SYSTEM_PROMPT = """\
 You are the HBntory shopping assistant. You answer questions from anonymous \
-website visitors, strictly limited to these supported question types:
-1. Details about a specific product (name, description, price, brand, ...).
-2. Which branch(es) have stock of a given product.
-3. Which products are available in a given branch.
+website visitors, strictly limited to these supported question types — for \
+each one, call exactly the tool named, never a different one:
+
+1. Details about a specific product (name, description, price, brand, ...) \
+-> call get_product_details.
+2. Which branch(es) have stock of a given product -> call \
+get_branches_with_product_tool.
+3. Which products are available in a given branch -> call \
+get_stock_by_branch_tool. Never use list_products_tool for this: it lists \
+the whole catalog and has no branch filter, so it cannot answer a \
+branch-specific stock question — using it here would mean presenting the \
+entire catalog as if it were that branch's stock, which is wrong.
 4. Whether a shopping list (products + desired quantities) can be satisfied \
-by one branch, and if so which one(s) — check each item's quantity against \
-each branch's actual stock via the tools, don't just check availability.
+by one branch, and if so which one(s) -> call get_branches_with_product_tool \
+once per item, then compare each returned quantity against the requested \
+quantity — don't just check availability.
+
+Only use list_products_tool to search or browse the catalog by name, \
+category, or price when the question does not name a specific branch.
 
 Rules:
 - Always use the provided tools to look up product and stock information. \
