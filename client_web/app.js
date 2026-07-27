@@ -21,6 +21,15 @@ document.getElementById("login-link").href = BACKOFFICE_URL;
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
 
+// Catalog data comes from the external Product API (see catalog.js) —
+// escape before injecting into innerHTML so a name/SKU containing " or <
+// can't break the markup (e.g. a data-sku attribute) or inject a tag.
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 /* -----------------------------------------------------------------------
  * Theme toggle (defaults to system preference via CSS; a manual pick is
  * persisted so it survives a reload, see style.css :root[data-theme]).
@@ -153,10 +162,13 @@ function productsForActiveBranch() {
 
 function renderFilters() {
   const branchButtons = catalogBranches
-    .map((b) => `<button type="button" class="filter-btn" data-branch="${b.name}" role="tab" aria-selected="false">${b.name}</button>`)
+    .map((b) => {
+      const name = escapeHtml(b.name);
+      return `<button type="button" class="filter-btn" data-branch="${name}" aria-pressed="false">${name}</button>`;
+    })
     .join("");
   branchFilterEl.innerHTML =
-    `<button type="button" class="filter-btn active" data-branch="all" role="tab" aria-selected="true">Toutes les branches</button>${branchButtons}`;
+    `<button type="button" class="filter-btn active" data-branch="all" aria-pressed="true">Toutes les branches</button>${branchButtons}`;
 }
 
 function renderGrid() {
@@ -173,16 +185,17 @@ function renderGrid() {
 
   catalogGridEl.innerHTML = products.map((item, index) => {
     const price = formatPrice(item);
+    const sku = escapeHtml(item.sku);
     const badges = item.stocks
-      .map((s) => `<span class="stock-badge" data-level="${stockLevel(s.quantity)}">${s.branch} · ${s.quantity}</span>`)
+      .map((s) => `<span class="stock-badge" data-level="${stockLevel(s.quantity)}">${escapeHtml(s.branch)} · ${s.quantity}</span>`)
       .join("");
     return `
-      <button type="button" class="product-card" data-sku="${item.sku}" style="--i:${index}">
-        <span class="category">${item.category || item.brand || ""}</span>
-        <span class="name">${item.name}</span>
-        <span class="sku">${item.sku}</span>
+      <button type="button" class="product-card" data-sku="${sku}" style="--i:${index}">
+        <span class="category">${escapeHtml(item.category || item.brand || "")}</span>
+        <span class="name">${escapeHtml(item.name)}</span>
+        <span class="sku">${sku}</span>
         <span class="card-footer">
-          ${price ? `<span class="price">${price}</span>` : "<span></span>"}
+          ${price ? `<span class="price">${escapeHtml(price)}</span>` : "<span></span>"}
           <span class="stock-badges">${badges}</span>
         </span>
       </button>
@@ -207,7 +220,7 @@ branchFilterEl.addEventListener("click", (event) => {
   activeBranch = btn.dataset.branch;
   for (const b of branchFilterEl.querySelectorAll(".filter-btn")) {
     b.classList.toggle("active", b === btn);
-    b.setAttribute("aria-selected", String(b === btn));
+    b.setAttribute("aria-pressed", String(b === btn));
   }
   renderGrid();
 });

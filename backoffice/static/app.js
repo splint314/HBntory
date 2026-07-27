@@ -213,8 +213,8 @@ async function loadStock() {
   for (const item of items) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${item.product_sku}</td>
-      <td>${productName(item.product_sku)}</td>
+      <td>${escapeHtml(item.product_sku)}</td>
+      <td>${escapeHtml(productName(item.product_sku))}</td>
       <td>${item.quantity}</td>
     `;
     tbody.appendChild(tr);
