@@ -9,6 +9,8 @@
 </head>
 <body>
 
+<div class="aurora" aria-hidden="true"></div>
+
 <header class="site-header">
   <div class="header-inner">
     <div class="brand">
@@ -93,15 +95,15 @@
 
     <div id="common-page-dashboard" class="view-page">
       <div class="dashboard-grid">
-        <div class="stat-card">
+        <div class="stat-card" style="--i:0">
           <span class="stat-value" id="stat-common-skus">—</span>
           <span class="stat-label">Références en stock</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" style="--i:1">
           <span class="stat-value" id="stat-common-units">—</span>
           <span class="stat-label">Unités totales</span>
         </div>
-        <div class="stat-card" data-tone="warn">
+        <div class="stat-card" data-tone="warn" style="--i:2">
           <span class="stat-value" id="stat-common-low">—</span>
           <span class="stat-label">Stock faible</span>
         </div>
@@ -203,11 +205,11 @@
 
     <div id="admin-page-dashboard" class="view-page">
       <div class="dashboard-grid">
-        <div class="stat-card">
+        <div class="stat-card" style="--i:0">
           <span class="stat-value" id="stat-admin-users">—</span>
           <span class="stat-label">Utilisateurs actifs</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" style="--i:1">
           <span class="stat-value" id="stat-admin-branches">—</span>
           <span class="stat-label">Branches</span>
         </div>

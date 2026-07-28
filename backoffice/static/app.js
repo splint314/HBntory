@@ -47,6 +47,24 @@ function escapeHtml(str) {
   }[c]));
 }
 
+// Animates a stat-value's digits counting up to its new total instead of
+// just snapping to it. Purely cosmetic — reduced-motion users get an
+// instant jump since the CSS animation-duration override makes each step
+// resolve within a single frame.
+function animateCount(el, target) {
+  const start = parseInt(el.textContent, 10) || 0;
+  if (start === target) { el.textContent = target; return; }
+  const duration = 500;
+  const startTime = performance.now();
+  function tick(now) {
+    const progress = Math.min(1, (now - startTime) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(start + (target - start) * eased);
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
 // ---------------------------------------------------------------------------
 // Theme toggle (defaults to system preference via CSS; a manual pick is
 // persisted so it survives a reload, see style.css :root[data-theme]).
@@ -311,22 +329,27 @@ async function loadStock() {
   skeletonRows(tbody, 3);
   const items = await api("/api/stock");
   tbody.innerHTML = "";
-  for (const item of items) {
+  items.forEach((item, index) => {
     const tr = document.createElement("tr");
+    tr.style.setProperty("--i", index);
     tr.innerHTML = `
       <td>${escapeHtml(item.product_sku)}</td>
       <td>${escapeHtml(productName(item.product_sku))}</td>
       <td><span class="quantity-cell" data-level="${stockLevel(item.quantity)}">${item.quantity}</span></td>
     `;
     tbody.appendChild(tr);
-  }
+  });
   document.getElementById("stock-empty").classList.toggle("hidden", items.length > 0);
 
-  document.getElementById("stat-common-skus").textContent = items.length;
-  document.getElementById("stat-common-units").textContent =
-    items.reduce((sum, item) => sum + item.quantity, 0);
-  document.getElementById("stat-common-low").textContent =
-    items.filter((item) => stockLevel(item.quantity) === "low").length;
+  animateCount(document.getElementById("stat-common-skus"), items.length);
+  animateCount(
+    document.getElementById("stat-common-units"),
+    items.reduce((sum, item) => sum + item.quantity, 0),
+  );
+  animateCount(
+    document.getElementById("stat-common-low"),
+    items.filter((item) => stockLevel(item.quantity) === "low").length,
+  );
 }
 
 document.getElementById("check-form").addEventListener("submit", async (e) => {
@@ -453,8 +476,9 @@ async function loadUsers() {
   const branchName = (id) => branches.find((b) => b.id === id)?.name ?? "—";
 
   tbody.innerHTML = "";
-  for (const user of users) {
+  users.forEach((user, index) => {
     const tr = document.createElement("tr");
+    tr.style.setProperty("--i", index);
     const actionsTd = document.createElement("td");
     actionsTd.className = "actions";
 
@@ -486,11 +510,13 @@ async function loadUsers() {
     `;
     tr.appendChild(actionsTd);
     tbody.appendChild(tr);
-  }
+  });
 
-  document.getElementById("stat-admin-users").textContent =
-    users.filter((u) => u.is_active).length;
-  document.getElementById("stat-admin-branches").textContent = branches.length;
+  animateCount(
+    document.getElementById("stat-admin-users"),
+    users.filter((u) => u.is_active).length,
+  );
+  animateCount(document.getElementById("stat-admin-branches"), branches.length);
 }
 
 function reportAdmin(message, ok) {
