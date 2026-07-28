@@ -110,49 +110,18 @@
 
     <div id="common-page-stock" class="view-page hidden">
       <div class="panel">
-        <h2>Stock de ma branche</h2>
-        <div class="table-wrap">
-          <table id="stock-table">
-            <thead><tr><th>SKU</th><th>Produit</th><th>Quantité</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <p id="stock-empty" class="hidden status">Aucun produit en stock pour cette branche.</p>
-      </div>
-
-      <div class="panel">
-        <h3>Vérifier la quantité d'un produit</h3>
-        <form id="check-form" class="inline-form">
-          <label>SKU <input type="text" id="check-sku" placeholder="ex. HB-LAP-1001" required></label>
-          <button type="submit">Vérifier</button>
-        </form>
-        <p id="check-result"></p>
-      </div>
-
-      <div class="panel">
-        <h3>Ajouter / retirer du stock</h3>
+        <h2>Catalogue &amp; stock de ma branche</h2>
         <p class="hint">
           Les produits proviennent du catalogue de l'API Produit externe
           (nom, description, prix) ; seule la quantité est stockée ici, pour
           votre branche uniquement.
         </p>
-        <form id="stock-form">
-          <label>Produit
-            <select id="stock-product" required></select>
-          </label>
-          <label>Quantité
-            <div class="quantity-stepper">
-              <button type="button" class="stepper-btn" id="stock-quantity-dec" aria-label="Diminuer">−</button>
-              <input type="number" id="stock-quantity" min="1" step="1" required>
-              <button type="button" class="stepper-btn" id="stock-quantity-inc" aria-label="Augmenter">+</button>
-            </div>
-          </label>
-          <div class="button-row">
-            <button type="button" id="stock-add-btn">Ajouter</button>
-            <button type="button" id="stock-remove-btn" class="secondary">Retirer</button>
-          </div>
-        </form>
-        <p id="stock-message"></p>
+        <label class="catalog-search-label" for="stock-catalog-search">
+          Rechercher un produit
+          <input type="search" id="stock-catalog-search" placeholder="Nom ou SKU… (ex. HB-LAP-1001)">
+        </label>
+        <div id="stock-catalog-grid" class="catalog-grid"></div>
+        <p id="stock-catalog-empty" class="hidden status">Aucun produit ne correspond à cette recherche.</p>
       </div>
     </div>
   </section>

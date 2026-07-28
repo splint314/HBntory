@@ -226,8 +226,7 @@ async function render() {
     hide("admin-view");
     show("common-view");
     switchView("common-nav", commonPages, "dashboard");
-    await loadProducts();
-    await loadStock();
+    await loadStockCatalog();
   }
 }
 
@@ -259,26 +258,8 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Common user: stock
+// Common user: product catalog + stock (search, add/remove per card)
 // ---------------------------------------------------------------------------
-
-async function loadProducts() {
-  const data = await api("/api/products?limit=100");
-  state.products = data.results || [];
-  const select = document.getElementById("stock-product");
-  select.innerHTML = "";
-  for (const product of state.products) {
-    const option = document.createElement("option");
-    option.value = product.sku;
-    option.textContent = `${product.sku} — ${product.name}`;
-    select.appendChild(option);
-  }
-}
-
-function productName(sku) {
-  const product = state.products.find((p) => p.sku === sku);
-  return product ? product.name : "(nom indisponible)";
-}
 
 // Same thresholds as client_web's catalog stock badges — a quick read on
 // branch stock health without adding a formal level to the API.
@@ -296,76 +277,155 @@ function skeletonRows(tbody, colCount, rowCount = 3) {
   ).join("");
 }
 
-async function loadStock() {
-  const tbody = document.querySelector("#stock-table tbody");
-  skeletonRows(tbody, 3);
-  const items = await api("/api/stock");
-  tbody.innerHTML = "";
-  for (const item of items) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${escapeHtml(item.product_sku)}</td>
-      <td>${escapeHtml(productName(item.product_sku))}</td>
-      <td><span class="quantity-cell" data-level="${stockLevel(item.quantity)}">${item.quantity}</span></td>
-    `;
-    tbody.appendChild(tr);
-  }
-  document.getElementById("stock-empty").classList.toggle("hidden", items.length > 0);
+let stockBySku = new Map(); // product_sku -> quantity in the user's branch
+let catalogSearchTerm = "";
 
-  document.getElementById("stat-common-skus").textContent = items.length;
-  document.getElementById("stat-common-units").textContent =
-    items.reduce((sum, item) => sum + item.quantity, 0);
-  document.getElementById("stat-common-low").textContent =
-    items.filter((item) => stockLevel(item.quantity) === "low").length;
+function formatPrice(product) {
+  if (product.unit_price == null) return null;
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: product.currency || "USD",
+  }).format(product.unit_price);
 }
 
-document.getElementById("check-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const sku = document.getElementById("check-sku").value.trim();
-  const resultEl = document.getElementById("check-result");
-  try {
-    const result = await api(`/api/stock/${encodeURIComponent(sku)}`);
-    resultEl.textContent = `${result.product_sku} : ${result.quantity} unité(s) dans votre branche.`;
-    resultEl.className = "success";
-  } catch (err) {
-    resultEl.textContent = err.message;
-    resultEl.className = "error";
+function updateCommonStats() {
+  const quantities = [...stockBySku.values()];
+  document.getElementById("stat-common-skus").textContent = quantities.length;
+  document.getElementById("stat-common-units").textContent =
+    quantities.reduce((sum, q) => sum + q, 0);
+  document.getElementById("stat-common-low").textContent =
+    quantities.filter((q) => stockLevel(q) === "low").length;
+}
+
+function filteredCatalogProducts() {
+  const term = catalogSearchTerm.trim().toLowerCase();
+  if (!term) return state.products;
+  return state.products.filter((p) =>
+    p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term)
+  );
+}
+
+function renderCatalogSkeleton(count = 6) {
+  const grid = document.getElementById("stock-catalog-grid");
+  hide("stock-catalog-empty");
+  grid.innerHTML = Array.from({ length: count }, () => `
+    <div class="product-card skeleton-card" aria-hidden="true">
+      <span class="skeleton" style="width:35%"></span>
+      <span class="skeleton" style="width:80%"></span>
+      <span class="skeleton" style="width:50%"></span>
+      <span class="card-footer">
+        <span class="skeleton" style="width:30%"></span>
+        <span class="skeleton" style="width:35%"></span>
+      </span>
+    </div>
+  `).join("");
+}
+
+function renderCatalogGrid() {
+  const grid = document.getElementById("stock-catalog-grid");
+  const products = filteredCatalogProducts();
+
+  document.getElementById("stock-catalog-empty").classList.toggle("hidden", products.length > 0);
+  if (products.length === 0) {
+    grid.innerHTML = "";
+    return;
   }
+
+  grid.innerHTML = products.map((product, index) => {
+    const quantity = stockBySku.get(product.sku) ?? 0;
+    const price = formatPrice(product);
+    const sku = escapeHtml(product.sku);
+    const name = escapeHtml(product.name);
+    return `
+      <div class="product-card" data-sku="${sku}" style="--i:${index}">
+        <span class="category">${escapeHtml(product.category || product.brand || "")}</span>
+        <span class="name">${name}</span>
+        <span class="sku">${sku}</span>
+        <span class="card-footer">
+          ${price ? `<span class="price">${escapeHtml(price)}</span>` : "<span></span>"}
+          <span class="quantity-cell" data-level="${stockLevel(quantity)}">${quantity}</span>
+        </span>
+        <div class="card-controls">
+          <div class="quantity-stepper">
+            <button type="button" class="stepper-btn" data-action="dec" aria-label="Diminuer la quantité">−</button>
+            <input type="number" class="card-qty-input" min="1" step="1" value="1" aria-label="Quantité pour ${name}">
+            <button type="button" class="stepper-btn" data-action="inc" aria-label="Augmenter la quantité">+</button>
+          </div>
+          <div class="button-row">
+            <button type="button" class="card-add-btn">Ajouter</button>
+            <button type="button" class="card-remove-btn secondary">Retirer</button>
+          </div>
+        </div>
+        <p class="card-message" aria-live="polite"></p>
+      </div>
+    `;
+  }).join("");
+}
+
+async function loadStockCatalog() {
+  renderCatalogSkeleton();
+  const [productsData, stockItems] = await Promise.all([
+    api("/api/products?limit=100"),
+    api("/api/stock"),
+  ]);
+  state.products = productsData.results || [];
+  stockBySku = new Map(stockItems.map((item) => [item.product_sku, item.quantity]));
+  updateCommonStats();
+  renderCatalogGrid();
+}
+
+document.getElementById("stock-catalog-search").addEventListener("input", (e) => {
+  catalogSearchTerm = e.target.value;
+  renderCatalogGrid();
 });
 
-async function submitStockChange(endpoint) {
-  const sku = document.getElementById("stock-product").value;
-  const quantity = parseInt(document.getElementById("stock-quantity").value, 10);
-  const messageEl = document.getElementById("stock-message");
+async function submitCardStockChange(card, endpoint) {
+  const sku = card.dataset.sku;
+  const quantity = parseInt(card.querySelector(".card-qty-input").value, 10);
+  const messageEl = card.querySelector(".card-message");
+  const buttons = card.querySelectorAll("button");
+
+  messageEl.textContent = "";
+  delete messageEl.dataset.tone;
+  buttons.forEach((b) => { b.disabled = true; });
+
   try {
-    await api(endpoint, {
+    const result = await api(endpoint, {
       method: "POST",
       body: JSON.stringify({ product_sku: sku, quantity }),
     });
+    stockBySku.set(sku, result.quantity);
+    const badge = card.querySelector(".quantity-cell");
+    badge.textContent = result.quantity;
+    badge.dataset.level = stockLevel(result.quantity);
     messageEl.textContent = "Stock mis à jour.";
-    messageEl.className = "success";
-    await loadStock();
+    messageEl.dataset.tone = "success";
+    updateCommonStats();
   } catch (err) {
     messageEl.textContent = err.message;
-    messageEl.className = "error";
+    messageEl.dataset.tone = "error";
+  } finally {
+    buttons.forEach((b) => { b.disabled = false; });
   }
 }
 
-document.getElementById("stock-add-btn").addEventListener("click", () => {
-  submitStockChange("/api/stock/add");
-});
-document.getElementById("stock-remove-btn").addEventListener("click", () => {
-  submitStockChange("/api/stock/remove");
-});
+document.getElementById("stock-catalog-grid").addEventListener("click", (event) => {
+  const card = event.target.closest(".product-card");
+  if (!card || card.classList.contains("skeleton-card")) return;
 
-const stockQuantityInput = document.getElementById("stock-quantity");
-document.getElementById("stock-quantity-dec").addEventListener("click", () => {
-  const value = Math.max(1, (parseInt(stockQuantityInput.value, 10) || 1) - 1);
-  stockQuantityInput.value = value;
-});
-document.getElementById("stock-quantity-inc").addEventListener("click", () => {
-  const value = (parseInt(stockQuantityInput.value, 10) || 0) + 1;
-  stockQuantityInput.value = value;
+  const stepBtn = event.target.closest(".stepper-btn");
+  if (stepBtn) {
+    const input = card.querySelector(".card-qty-input");
+    const current = parseInt(input.value, 10) || 1;
+    input.value = stepBtn.dataset.action === "inc" ? current + 1 : Math.max(1, current - 1);
+    return;
+  }
+
+  if (event.target.closest(".card-add-btn")) {
+    submitCardStockChange(card, "/api/stock/add");
+  } else if (event.target.closest(".card-remove-btn")) {
+    submitCardStockChange(card, "/api/stock/remove");
+  }
 });
 
 // ---------------------------------------------------------------------------
