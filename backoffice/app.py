@@ -44,6 +44,34 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
 )
 
+# client_web's catalog is gated behind a real Backoffice login (see
+# client_web/app.js): it calls /api/login and /api/me cross-origin, with
+# the session cookie, so it can tell whether the visitor actually holds a
+# Backoffice account. 127.0.0.1 and localhost on any port are "same-site"
+# (site = scheme + registrable domain, port doesn't count), so the
+# SameSite="Lax" cookie above is still sent on these requests — this only
+# needs CORS to allow the browser to read the response. Scoped to the three
+# auth routes only: the rest of the API (stock, users) is never meant to be
+# called cross-origin, even by a legitimate client_web session.
+_CORS_ORIGINS = {
+    o.strip() for o in os.getenv(
+        "CLIENT_WEB_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173"
+    ).split(",") if o.strip()
+}
+_CORS_PATHS = {"/api/login", "/api/logout", "/api/me"}
+
+
+@app.after_request
+def _add_cors_headers(response):
+    origin = request.headers.get("Origin")
+    if request.path in _CORS_PATHS and origin in _CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Vary"] = "Origin"
+    return response
+
 
 def _user_json(user: User) -> dict:
     return {

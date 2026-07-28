@@ -1,8 +1,8 @@
 # HBntory Client Web Interface (Task 6)
 
-Public, unauthenticated static page with two panels: a product **catalog**
-(grouped by branch, Lyon/Paris) and the natural-language **assistant** — a
-text input, a submit button, and a response area (see
+Static page with two panels: a product **catalog** (grouped by branch,
+Lyon/Paris) and the natural-language **assistant** — a text input, a submit
+button, and a response area (see
 [docs/architecture_and_planning.md](../docs/architecture_and_planning.md)
 §2.2 — plain REST, one question per request, no conversation history). No
 framework, no build step — `index.html` + `app.js` + `style.css`, same
@@ -13,6 +13,14 @@ restrained indigo/violet/teal accent lifted from the logo
 rings, and the stock-level dots — the same accent tokens (`--brand-1`,
 `--brand-2`, `--brand-teal`) are duplicated in `backoffice/static/style.css`
 for a consistent look across both frontends.
+
+**The assistant stays fully anonymous** — the subject requires that anyone
+can ask a question without logging in, and that never changes. **The
+catalog is reserved to Backoffice accounts** (bonus feature, outside the
+mandatory scope): it's gated behind a real cross-origin login against the
+Backoffice, not just a link (see §2.2 addendum in
+[docs/architecture_and_planning.md](../docs/architecture_and_planning.md)
+for the full justification and the CORS/cookie mechanics).
 
 ## Run
 
@@ -47,9 +55,22 @@ Requires the AI Query Service (`ai_service/`) running — see
 
 ### Catalog panel
 
-- On page load, fetches `GET /api/catalog` and renders one card per
-  product, grouped by branch (Lyon, Paris).
-- A pill filter bar ("Toutes les branches" + one pill per branch) switches
+- On page load, silently checks for an existing Backoffice session via
+  `GET http://127.0.0.1:5000/api/me` (cross-origin, `credentials:
+  "include"`) — if the visitor is already logged into the Backoffice (e.g.
+  in another tab), the catalog unlocks immediately with no extra step.
+- Otherwise shows a login gate (username + password, same accounts as the
+  Backoffice — admin or common) instead of the catalog. Submitting calls
+  `POST /api/login` on the Backoffice the same cross-origin way; on
+  success, fetches `/api/me` again to get the full profile (role, branch)
+  and unlocks the catalog.
+- Once unlocked, a small session banner shows who's connected
+  ("Connecté : alice — Lyon" / "Connecté : admin (Administrateur)",
+  indigo for admin, teal for common) with a "Se déconnecter" button that
+  calls `POST /api/logout` on the Backoffice and re-locks the catalog.
+- Unlocked: fetches `GET /api/catalog` (from `ai_service`, not the
+  Backoffice) and renders one card per product, grouped by branch. A pill
+  filter bar ("Toutes les branches" + one pill per branch) switches
   between a merged view (same SKU across branches shown once, with one
   stock badge per branch) and a single-branch view.
 - Clicking a product card fills the assistant's question input with
@@ -80,6 +101,11 @@ Requires the AI Query Service (`ai_service/`) running — see
   replaced with a generic "Impossible de joindre le service. Vérifiez qu'il
   est bien démarré." rather than a raw exception message. Applies to both
   the catalog load and the ask form.
+- **Wrong catalog login credentials** — the Backoffice's `/api/login`
+  `{"error": "invalid credentials"}` (401) is shown under the login form.
+- **Backoffice unreachable from the catalog login** — same `TypeError`
+  pattern as above, with a Backoffice-specific message ("Impossible de
+  joindre le Backoffice...").
 
 ## Example questions
 
@@ -117,6 +143,23 @@ scripts and stylesheet reference (`header-inner`, `header-actions`,
 `icon-btn`, `theme-toggle`, `login-link`, `btn-login`, `status-dots`,
 `input-row`) exists in the markup. The Backoffice (`http://127.0.0.1:5000`)
 was confirmed reachable so the "Se connecter" link resolves.
+
+Catalog login gate cross-origin flow verified (2026-07-28) with `curl`
+against the live Backoffice, `Origin: http://127.0.0.1:5173` on every
+request (simulating the browser):
+
+```
+POST /api/login  (admin/ChangeMe123!, cookie jar updated each step)
+  -> 200, Access-Control-Allow-Origin: http://127.0.0.1:5173,
+     Access-Control-Allow-Credentials: true
+GET  /api/me     (with the session cookie) -> 200, correct profile
+POST /api/logout (with the session cookie) -> 204
+GET  /api/me     (same cookie, after logout) -> 401 authentication required
+```
+
+Also confirmed a disallowed `Origin` (not `client_web`'s) gets no CORS
+headers at all on `/api/me`, so a page on another origin can't read the
+response even if it somehow had a valid cookie.
 
 Full-page manual click-through in a real browser (loading state, answer
 rendering, error rendering, catalog filters, card-to-question interaction)

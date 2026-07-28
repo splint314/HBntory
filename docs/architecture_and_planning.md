@@ -108,6 +108,21 @@ stock du produit X ? » ou « quels produits sont disponibles dans la branche Y 
   d'expérience « chat en temps réel ». Une réponse longue de l'agent arrive d'un seul
   bloc, après un temps d'attente.
 
+**Addendum — catalogue réservé aux comptes Backoffice :** l'assistant reste
+accessible anonymement (exigence du sujet, non négociable). Le catalogue
+(fonctionnalité bonus, hors périmètre obligatoire) est en revanche réservé
+aux comptes Backoffice existants : `client_web` appelle `POST /api/login`
+puis `GET /api/me` du Backoffice en cross-origin, avec `credentials:
+"include"`, pour vérifier une vraie session plutôt qu'un simple lien. Ceci
+fonctionne sans HTTPS car `127.0.0.1`/`localhost` sur des ports différents
+sont considérés « same-site » (le calcul same-site ignore le port), donc le
+cookie de session `SameSite=Lax` du Backoffice est bien envoyé sur ces
+requêtes cross-origin — seul du CORS explicite (`Access-Control-Allow-
+Origin` réfléchi vers l'origine de `client_web`, `Access-Control-Allow-
+Credentials: true`) était nécessaire côté Backoffice, restreint aux trois
+routes d'authentification (`/api/login`, `/api/logout`, `/api/me`), jamais
+au reste de l'API (stock, utilisateurs).
+
 ## 2.3 Service IA ↔ outils MCP — client MCP standard
 
 - **Option retenue :** le service IA embarque l'agent, qui se connecte au serveur MCP

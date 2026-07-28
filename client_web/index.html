@@ -45,14 +45,60 @@
     <section class="panel catalog" aria-labelledby="catalog-heading">
       <div class="panel-head">
         <h2 id="catalog-heading">Catalogue</h2>
-        <div id="branch-filter" class="branch-filter" role="group" aria-label="Filtrer par branche">
+        <div id="branch-filter" class="branch-filter hidden" role="group" aria-label="Filtrer par branche">
           <button type="button" class="filter-btn active" data-branch="all" aria-pressed="true">
             Toutes les branches
           </button>
         </div>
       </div>
 
-      <p id="catalog-status" class="status">
+      <div id="catalog-gate">
+        <p class="assistant-intro">
+          Le catalogue est réservé aux comptes Backoffice. Connectez-vous
+          avec vos identifiants (administrateur ou utilisateur) pour y
+          accéder.
+        </p>
+        <form id="catalog-login-form">
+          <label for="catalog-username">Nom d'utilisateur</label>
+          <input
+            type="text"
+            id="catalog-username"
+            placeholder="Nom d'utilisateur"
+            autocomplete="username"
+            required
+          >
+          <div class="input-row">
+            <div class="password-field" style="flex:1">
+              <label for="catalog-password">Mot de passe</label>
+              <input
+                type="password"
+                id="catalog-password"
+                placeholder="Mot de passe"
+                autocomplete="current-password"
+                required
+              >
+              <button type="button" class="toggle-password" data-target="catalog-password" aria-label="Afficher le mot de passe" aria-pressed="false">
+                <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19M1 1l22 22"/>
+                </svg>
+              </button>
+            </div>
+            <button type="submit" id="catalog-login-btn">Se connecter</button>
+          </div>
+        </form>
+        <p id="catalog-login-error" class="hidden" role="alert"></p>
+      </div>
+
+      <div id="catalog-session" class="catalog-session hidden">
+        <span id="catalog-session-label"></span>
+        <button type="button" id="catalog-logout-btn" class="btn-ghost">Se déconnecter</button>
+      </div>
+
+      <p id="catalog-status" class="status hidden">
         <span class="status-dots" aria-hidden="true"><i></i><i></i><i></i></span>
         Chargement du catalogue…
       </p>
