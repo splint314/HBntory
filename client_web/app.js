@@ -21,6 +21,27 @@ document.getElementById("login-link").href = BACKOFFICE_URL;
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
 
+// Catalog data comes from the external Product API (see catalog.js) —
+// escape before injecting into innerHTML so a name/SKU containing " or <
+// can't break the markup (e.g. a data-sku attribute) or inject a tag.
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+// Delegated show/hide password toggle (used by the catalog login gate).
+document.addEventListener("click", (event) => {
+  const btn = event.target.closest(".toggle-password");
+  if (!btn) return;
+  const passwordInput = document.getElementById(btn.dataset.target);
+  const showing = passwordInput.type === "text";
+  passwordInput.type = showing ? "password" : "text";
+  btn.classList.toggle("is-visible", !showing);
+  btn.setAttribute("aria-pressed", String(!showing));
+  btn.setAttribute("aria-label", showing ? "Afficher le mot de passe" : "Masquer le mot de passe");
+});
+
 /* -----------------------------------------------------------------------
  * Theme toggle (defaults to system preference via CSS; a manual pick is
  * persisted so it survives a reload, see style.css :root[data-theme]).
@@ -153,10 +174,13 @@ function productsForActiveBranch() {
 
 function renderFilters() {
   const branchButtons = catalogBranches
-    .map((b) => `<button type="button" class="filter-btn" data-branch="${b.name}" role="tab" aria-selected="false">${b.name}</button>`)
+    .map((b) => {
+      const name = escapeHtml(b.name);
+      return `<button type="button" class="filter-btn" data-branch="${name}" aria-pressed="false">${name}</button>`;
+    })
     .join("");
   branchFilterEl.innerHTML =
-    `<button type="button" class="filter-btn active" data-branch="all" role="tab" aria-selected="true">Toutes les branches</button>${branchButtons}`;
+    `<button type="button" class="filter-btn active" data-branch="all" aria-pressed="true">Toutes les branches</button>${branchButtons}`;
 }
 
 function renderGrid() {
@@ -173,16 +197,17 @@ function renderGrid() {
 
   catalogGridEl.innerHTML = products.map((item, index) => {
     const price = formatPrice(item);
+    const sku = escapeHtml(item.sku);
     const badges = item.stocks
-      .map((s) => `<span class="stock-badge" data-level="${stockLevel(s.quantity)}">${s.branch} · ${s.quantity}</span>`)
+      .map((s) => `<span class="stock-badge" data-level="${stockLevel(s.quantity)}">${escapeHtml(s.branch)} · ${s.quantity}</span>`)
       .join("");
     return `
-      <button type="button" class="product-card" data-sku="${item.sku}" style="--i:${index}">
-        <span class="category">${item.category || item.brand || ""}</span>
-        <span class="name">${item.name}</span>
-        <span class="sku">${item.sku}</span>
+      <button type="button" class="product-card" data-sku="${sku}" style="--i:${index}">
+        <span class="category">${escapeHtml(item.category || item.brand || "")}</span>
+        <span class="name">${escapeHtml(item.name)}</span>
+        <span class="sku">${sku}</span>
         <span class="card-footer">
-          ${price ? `<span class="price">${price}</span>` : "<span></span>"}
+          ${price ? `<span class="price">${escapeHtml(price)}</span>` : "<span></span>"}
           <span class="stock-badges">${badges}</span>
         </span>
       </button>
@@ -201,24 +226,41 @@ function stockLevel(quantity) {
   return "high";
 }
 
+function renderSkeletonGrid(count = 6) {
+  catalogGridEl.innerHTML = Array.from({ length: count }, () => `
+    <div class="product-card skeleton-card" aria-hidden="true">
+      <span class="skeleton" style="width:35%"></span>
+      <span class="skeleton" style="width:80%"></span>
+      <span class="skeleton" style="width:50%"></span>
+      <span class="card-footer">
+        <span class="skeleton" style="width:30%"></span>
+        <span class="skeleton" style="width:35%"></span>
+      </span>
+    </div>
+  `).join("");
+  hide(catalogStatusEl);
+  show(catalogGridEl);
+}
+
 branchFilterEl.addEventListener("click", (event) => {
   const btn = event.target.closest(".filter-btn");
   if (!btn) return;
   activeBranch = btn.dataset.branch;
   for (const b of branchFilterEl.querySelectorAll(".filter-btn")) {
     b.classList.toggle("active", b === btn);
-    b.setAttribute("aria-selected", String(b === btn));
+    b.setAttribute("aria-pressed", String(b === btn));
   }
   renderGrid();
 });
 
 catalogGridEl.addEventListener("click", (event) => {
   const card = event.target.closest(".product-card");
-  if (!card) return;
+  if (!card || card.classList.contains("skeleton-card")) return;
   askAbout(card.dataset.sku);
 });
 
 async function loadCatalog() {
+  renderSkeletonGrid();
   try {
     const response = await fetch(`${AI_SERVICE_URL}/api/catalog`);
     const isJson = response.headers.get("content-type")?.includes("json");
@@ -242,4 +284,102 @@ async function loadCatalog() {
   }
 }
 
-loadCatalog();
+/* -----------------------------------------------------------------------
+ * Catalog login gate — the catalog is reserved to Backoffice accounts.
+ * client_web has no accounts of its own, so this calls the Backoffice's
+ * own /api/login and /api/me cross-origin, with the session cookie
+ * (credentials: "include"). See backoffice/app.py's CORS allowlist
+ * (_CORS_ORIGINS/_CORS_PATHS) — only these two routes plus /api/logout
+ * accept cross-origin credentialed requests, scoped to the client_web
+ * origin(s). The assistant above stays fully anonymous either way, per
+ * the subject's requirement that anonymous users can always ask questions.
+ * --------------------------------------------------------------------- */
+
+const catalogGateEl = document.getElementById("catalog-gate");
+const catalogSessionEl = document.getElementById("catalog-session");
+const catalogSessionLabelEl = document.getElementById("catalog-session-label");
+const catalogLoginForm = document.getElementById("catalog-login-form");
+const catalogLoginBtn = document.getElementById("catalog-login-btn");
+const catalogLoginErrorEl = document.getElementById("catalog-login-error");
+
+function showCatalogGate() {
+  hide(catalogSessionEl);
+  hide(branchFilterEl);
+  hide(catalogGridEl);
+  hide(catalogStatusEl);
+  show(catalogGateEl);
+}
+
+function showCatalogUnlocked(me) {
+  hide(catalogGateEl);
+  hide(catalogLoginErrorEl);
+  catalogSessionEl.dataset.role = me.role;
+  catalogSessionLabelEl.textContent = me.role === "admin"
+    ? `Connecté : ${me.username} (Administrateur)`
+    : `Connecté : ${me.username} — ${me.branch_name ?? "?"}`;
+  show(catalogSessionEl);
+  show(branchFilterEl);
+  loadCatalog();
+}
+
+async function fetchBackofficeMe() {
+  try {
+    const response = await fetch(`${BACKOFFICE_URL}/api/me`, { credentials: "include" });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+catalogLoginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const username = document.getElementById("catalog-username").value.trim();
+  const password = document.getElementById("catalog-password").value;
+
+  hide(catalogLoginErrorEl);
+  catalogLoginBtn.disabled = true;
+  try {
+    const response = await fetch(`${BACKOFFICE_URL}/api/login`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const isJson = response.headers.get("content-type")?.includes("json");
+    const body = isJson ? await response.json().catch(() => null) : null;
+
+    if (!response.ok) {
+      throw new Error(body?.error || `Connexion refusée (${response.status}).`);
+    }
+
+    document.getElementById("catalog-password").value = "";
+    const me = await fetchBackofficeMe();
+    showCatalogUnlocked(me || body);
+  } catch (err) {
+    const message = err instanceof TypeError
+      ? "Impossible de joindre le Backoffice. Vérifiez qu'il est bien démarré."
+      : err.message;
+    catalogLoginErrorEl.textContent = message;
+    show(catalogLoginErrorEl);
+  } finally {
+    catalogLoginBtn.disabled = false;
+  }
+});
+
+document.getElementById("catalog-logout-btn").addEventListener("click", async () => {
+  try {
+    await fetch(`${BACKOFFICE_URL}/api/logout`, { method: "POST", credentials: "include" });
+  } catch {
+    // Best-effort: even if the request fails, drop the local catalog view.
+  }
+  showCatalogGate();
+});
+
+(async () => {
+  const me = await fetchBackofficeMe();
+  if (me) {
+    showCatalogUnlocked(me);
+  } else {
+    showCatalogGate();
+  }
+})();

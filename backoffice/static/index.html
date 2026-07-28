@@ -40,9 +40,26 @@
 
 <main>
 
+  <div id="role-banner" class="role-banner hidden">
+    <svg class="role-icon-admin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    <svg class="role-icon-common" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+      <line x1="12" y1="22.08" x2="12" y2="12"/>
+    </svg>
+    <span id="role-banner-text"></span>
+  </div>
+
   <section id="login-view" class="login-shell">
     <div class="panel login-card">
+      <img class="login-logo" src="/static/logo.svg" alt="" aria-hidden="true">
       <h2>Connexion</h2>
+      <div class="login-role-toggle" role="group" aria-label="Type de connexion">
+        <button type="button" class="role-toggle-btn active" data-role="user" aria-pressed="true">Utilisateur</button>
+        <button type="button" class="role-toggle-btn" data-role="admin" aria-pressed="false">Administrateur</button>
+      </div>
       <form id="login-form">
         <label>Nom d'utilisateur
           <input type="text" id="login-username" autocomplete="username" required>
@@ -68,85 +85,135 @@
   </section>
 
   <section id="common-view" class="hidden">
-    <div id="branch-banner" class="banner"></div>
+    <nav class="view-nav" id="common-nav">
+      <button type="button" class="nav-btn active" data-view="dashboard">Tableau de bord</button>
+      <button type="button" class="nav-btn" data-view="stock">Gestion du stock</button>
+    </nav>
 
-    <div class="panel">
-      <h2>Stock de ma branche</h2>
-      <div class="table-wrap">
-        <table id="stock-table">
-          <thead><tr><th>SKU</th><th>Produit</th><th>Quantité</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p id="stock-empty" class="hidden status">Aucun produit en stock pour cette branche.</p>
-    </div>
-
-    <div class="panel">
-      <h3>Vérifier la quantité d'un produit</h3>
-      <form id="check-form" class="inline-form">
-        <label>SKU <input type="text" id="check-sku" placeholder="ex. HB-LAP-1001" required></label>
-        <button type="submit">Vérifier</button>
-      </form>
-      <p id="check-result"></p>
-    </div>
-
-    <div class="panel">
-      <h3>Ajouter / retirer du stock</h3>
-      <p class="hint">
-        Les produits proviennent du catalogue de l'API Produit externe
-        (nom, description, prix) ; seule la quantité est stockée ici, pour
-        votre branche uniquement.
-      </p>
-      <form id="stock-form">
-        <label>Produit
-          <select id="stock-product" required></select>
-        </label>
-        <label>Quantité <input type="number" id="stock-quantity" min="1" step="1" required></label>
-        <div class="button-row">
-          <button type="button" id="stock-add-btn">Ajouter</button>
-          <button type="button" id="stock-remove-btn" class="secondary">Retirer</button>
+    <div id="common-page-dashboard" class="view-page">
+      <div class="dashboard-grid">
+        <div class="stat-card">
+          <span class="stat-value" id="stat-common-skus">—</span>
+          <span class="stat-label">Références en stock</span>
         </div>
-      </form>
-      <p id="stock-message"></p>
+        <div class="stat-card">
+          <span class="stat-value" id="stat-common-units">—</span>
+          <span class="stat-label">Unités totales</span>
+        </div>
+        <div class="stat-card" data-tone="warn">
+          <span class="stat-value" id="stat-common-low">—</span>
+          <span class="stat-label">Stock faible</span>
+        </div>
+      </div>
+      <button type="button" id="go-to-stock-btn">Gestion du stock →</button>
+    </div>
+
+    <div id="common-page-stock" class="view-page hidden">
+      <div class="panel">
+        <h2>Stock de ma branche</h2>
+        <div class="table-wrap">
+          <table id="stock-table">
+            <thead><tr><th>SKU</th><th>Produit</th><th>Quantité</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="stock-empty" class="hidden status">Aucun produit en stock pour cette branche.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Vérifier la quantité d'un produit</h3>
+        <form id="check-form" class="inline-form">
+          <label>SKU <input type="text" id="check-sku" placeholder="ex. HB-LAP-1001" required></label>
+          <button type="submit">Vérifier</button>
+        </form>
+        <p id="check-result"></p>
+      </div>
+
+      <div class="panel">
+        <h3>Ajouter / retirer du stock</h3>
+        <p class="hint">
+          Les produits proviennent du catalogue de l'API Produit externe
+          (nom, description, prix) ; seule la quantité est stockée ici, pour
+          votre branche uniquement.
+        </p>
+        <form id="stock-form">
+          <label>Produit
+            <select id="stock-product" required></select>
+          </label>
+          <label>Quantité
+            <div class="quantity-stepper">
+              <button type="button" class="stepper-btn" id="stock-quantity-dec" aria-label="Diminuer">−</button>
+              <input type="number" id="stock-quantity" min="1" step="1" required>
+              <button type="button" class="stepper-btn" id="stock-quantity-inc" aria-label="Augmenter">+</button>
+            </div>
+          </label>
+          <div class="button-row">
+            <button type="button" id="stock-add-btn">Ajouter</button>
+            <button type="button" id="stock-remove-btn" class="secondary">Retirer</button>
+          </div>
+        </form>
+        <p id="stock-message"></p>
+      </div>
     </div>
   </section>
 
   <section id="admin-view" class="hidden">
-    <div class="panel">
-      <h2>Utilisateurs</h2>
-      <div class="table-wrap">
-        <table id="users-table">
-          <thead>
-            <tr><th>Utilisateur</th><th>Rôle</th><th>Branche</th><th>Actif</th><th>Actions</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+    <nav class="view-nav" id="admin-nav">
+      <button type="button" class="nav-btn active" data-view="dashboard">Tableau de bord</button>
+      <button type="button" class="nav-btn" data-view="users">Utilisateurs</button>
+    </nav>
+
+    <div id="admin-page-dashboard" class="view-page">
+      <div class="dashboard-grid">
+        <div class="stat-card">
+          <span class="stat-value" id="stat-admin-users">—</span>
+          <span class="stat-label">Utilisateurs actifs</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="stat-admin-branches">—</span>
+          <span class="stat-label">Branches</span>
+        </div>
       </div>
-      <p id="admin-message"></p>
+      <button type="button" id="go-to-users-btn">Gérer les utilisateurs →</button>
     </div>
 
-    <div class="panel">
-      <h3>Créer un utilisateur commun</h3>
-      <form id="create-user-form">
-        <label>Nom d'utilisateur <input type="text" id="new-username" required></label>
-        <label>Mot de passe
-          <div class="password-field">
-            <input type="password" id="new-password" minlength="8" required>
-            <button type="button" class="toggle-password" data-target="new-password" aria-label="Afficher le mot de passe" aria-pressed="false">
-              <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-              <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19M1 1l22 22"/>
-              </svg>
-            </button>
-          </div>
-        </label>
-        <label>Branche <select id="new-branch" required></select></label>
-        <button type="submit">Créer</button>
-      </form>
-      <p id="create-user-message"></p>
+    <div id="admin-page-users" class="view-page hidden">
+      <div class="panel">
+        <h2>Utilisateurs</h2>
+        <div class="table-wrap">
+          <table id="users-table">
+            <thead>
+              <tr><th>Utilisateur</th><th>Rôle</th><th>Branche</th><th>Actif</th><th>Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="admin-message"></p>
+      </div>
+
+      <div class="panel">
+        <h3>Créer un utilisateur commun</h3>
+        <form id="create-user-form">
+          <label>Nom d'utilisateur <input type="text" id="new-username" required></label>
+          <label>Mot de passe
+            <div class="password-field">
+              <input type="password" id="new-password" minlength="8" required>
+              <button type="button" class="toggle-password" data-target="new-password" aria-label="Afficher le mot de passe" aria-pressed="false">
+                <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19M1 1l22 22"/>
+                </svg>
+              </button>
+            </div>
+          </label>
+          <label>Branche <select id="new-branch" required></select></label>
+          <button type="submit">Créer</button>
+        </form>
+        <p id="create-user-message"></p>
+      </div>
     </div>
   </section>
 
