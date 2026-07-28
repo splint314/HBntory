@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #
 # Launch every HBntory service locally (no Docker needed) for dev/demo use.
-# Assumes each service's .venv already exists (see LANCEMENT.md / README.md
-# "Option B" if not: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-# in backoffice/, product_mcp/, ai_service/).
+# Assumes each service's venv already exists (see LANCEMENT.md / README.md
+# "Option B" if not). product_mcp/ and ai_service/ each have their own
+# .venv/ in-place; the Backoffice's venv lives at the repo root instead
+# (created via `cd backoffice && python3 -m venv ../.venv`), which is why
+# it's addressed as ../.venv below rather than backoffice/.venv.
 #
 # Usage: ./launch_all.sh [stop]
 #   ./launch_all.sh        start everything, stream logs, Ctrl+C stops all of it
@@ -77,13 +79,13 @@ wait_for product_api "http://127.0.0.1:$PRODUCT_API_PORT/health"
 # 2. Backoffice: seed once (idempotent), then serve
 if [ ! -f "$ROOT/backoffice/hbntory.db" ]; then
   echo "Seeding Backoffice database (admin / $ADMIN_PASSWORD)..."
-  (cd "$ROOT/backoffice" && ADMIN_PASSWORD="$ADMIN_PASSWORD" .venv/bin/python seed.py) \
+  (cd "$ROOT/backoffice" && ADMIN_PASSWORD="$ADMIN_PASSWORD" ../.venv/bin/python seed.py) \
     >> "$LOG_DIR/backoffice.log" 2>&1
 fi
 start backoffice "$ROOT/backoffice" env \
   SECRET_KEY="change-me-in-production" \
   PRODUCT_API_URL="http://127.0.0.1:$PRODUCT_API_PORT" \
-  .venv/bin/python app.py
+  ../.venv/bin/python app.py
 wait_for backoffice "http://127.0.0.1:$BACKOFFICE_PORT/"
 
 # 3. Ollama: start if not already running, make sure the model is pulled
