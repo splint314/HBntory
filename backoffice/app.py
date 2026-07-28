@@ -339,4 +339,8 @@ def index():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Werkzeug's interactive debugger allows arbitrary code execution if it
+    # is ever reachable — never enable it by default, only via an explicit
+    # opt-in env var for local development.
+    debug = os.getenv("FLASK_DEBUG") == "1"
+    app.run(debug=debug, port=int(os.getenv("PORT", "5000")))

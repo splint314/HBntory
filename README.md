@@ -67,17 +67,14 @@ Détail complet ci-dessous ; dépannage rapide dans
 
 ```bash
 docker compose up --build
-
-# Une fois démarré, récupérer le modèle local (une seule fois, persisté
-# dans le volume ollama_data — pas besoin de le refaire au prochain lancement) :
-docker compose exec ollama ollama pull llama3.1:8b
 ```
 
-Démarre, dans l'ordre des dépendances : l'API Produit externe
-(`http://localhost:5001`), le Backoffice (`http://localhost:5000`, admin
-déjà seedé `admin` / `ChangeMe123!`, à changer via `ADMIN_PASSWORD` dans
-`docker-compose.yml`), **Ollama** (`http://localhost:11434`, le LLM local
-qui sert l'agent — voir §2.4 de
+Démarre, dans l'ordre des dépendances (`depends_on` + `healthcheck`, chaque
+service attend que le précédent soit réellement prêt, pas juste démarré) :
+l'API Produit externe (`http://localhost:5001`), le Backoffice
+(`http://localhost:5000`, admin déjà seedé `admin` / `ChangeMe123!`, à
+changer via `ADMIN_PASSWORD` dans `docker-compose.yml`), **Ollama**
+(`http://localhost:11434`, le LLM local qui sert l'agent — voir §2.4 de
 [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
 pour la justification de ce choix plutôt qu'une API payante), le Service
 IA (`http://localhost:5002`) et l'interface cliente
@@ -86,9 +83,14 @@ le volume nommé `backoffice_data`, monté en lecture seule dans le
 conteneur `ai-service` pour les outils de stock du serveur MCP (celui-ci
 n'a pas de conteneur propre : il n'a pas de port HTTP, il est lancé comme
 sous-processus par `ai_service`, voir
-[product_mcp/README.md](product_mcp/README.md)). Tant que le modèle n'est
-pas récupéré via `ollama pull`, `/api/ask` répond 503 au lieu de donner
-une vraie réponse — tout le reste fonctionne sans attendre.
+[product_mcp/README.md](product_mcp/README.md)).
+
+`ai-service` télécharge automatiquement le modèle (`ensure_model.py`, au
+démarrage du conteneur) s'il n'est pas déjà présent dans le volume
+`ollama_data` — aucune étape manuelle requise, mais le tout premier
+démarrage peut prendre plusieurs minutes le temps du téléchargement
+(~4.7 Go pour `llama3.1:8b`) ; le healthcheck d'`ai-service` tolère ce délai
+(`start_period: 600s`) avant de considérer le conteneur en échec.
 
 ### Option B — Chaque service manuellement
 
@@ -143,6 +145,8 @@ table des routes ci-dessous.
 | `ADMIN_PASSWORD` | Mot de passe en clair de l'admin, utilisé une seule fois par `seed.py` | *(obligatoire, aucun défaut)* |
 | `SECRET_KEY` | Clé de signature des cookies de session Flask | valeur aléatoire (dev uniquement) |
 | `PRODUCT_API_URL` | URL de l'API Produit externe | `http://localhost:5001` |
+| `FLASK_DEBUG` | Active le débogueur interactif Werkzeug si mis à `1` (**ne jamais l'activer en production** : exécution de code arbitraire si le débogueur est atteignable) | désactivé |
+| `PORT` | Port d'écoute (usage local via `python app.py`, ignoré par `gunicorn` en conteneur) | `5000` |
 
 #### Principales routes de l'API Backoffice
 
@@ -281,8 +285,10 @@ Aucune authentification requise. Questions d'exemple documentées :
 ## Problèmes courants
 
 - **`/api/ask` répond 503 "agent_unavailable"** : Ollama n'a pas encore le
-  modèle — `ollama pull llama3.1:8b` (ou `docker compose exec ollama ollama
-  pull llama3.1:8b` en Docker), voir §2.4 de
+  modèle — `ollama pull llama3.1:8b` en lancement manuel (Option B). En
+  Docker (Option A), `ai-service` le télécharge automatiquement au premier
+  démarrage (`ensure_model.py`) ; si ça persiste après plusieurs minutes,
+  vérifier `docker compose logs ai-service`. Voir §2.4 de
   [docs/architecture_and_planning.md](docs/architecture_and_planning.md).
 - **"invalid credentials" dans l'UI du Backoffice alors que l'API répond
   OK en `curl`** : autofill du navigateur avec un mauvais mot de passe —

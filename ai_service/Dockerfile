@@ -23,4 +23,10 @@ ENV PRODUCT_MCP_SERVER=/app/product_mcp/server.py
 
 EXPOSE 5002
 
-CMD ["python", "app.py"]
+# ensure_model.py blocks until AI_MODEL is pulled on OLLAMA_HOST (a fresh
+# deployment would otherwise 503 on /api/ask until someone remembers to run
+# `ollama pull` by hand). gunicorn instead of `python app.py`: the Werkzeug
+# dev server isn't meant for production traffic; --timeout must stay above
+# agent.py's REQUEST_TIMEOUT_SECONDS since one request can hold a worker for
+# minutes on a big model.
+CMD ["sh", "-c", "python ensure_model.py && gunicorn --bind 0.0.0.0:5002 --workers 2 --threads 4 --timeout 300 app:app"]
