@@ -42,6 +42,7 @@
 
   <section id="login-view" class="login-shell">
     <div class="panel login-card">
+      <img class="login-logo" src="/static/logo.svg" alt="" aria-hidden="true">
       <h2>Connexion</h2>
       <form id="login-form">
         <label>Nom d'utilisateur
@@ -101,7 +102,13 @@
         <label>Produit
           <select id="stock-product" required></select>
         </label>
-        <label>Quantité <input type="number" id="stock-quantity" min="1" step="1" required></label>
+        <label>Quantité
+          <div class="quantity-stepper">
+            <button type="button" class="stepper-btn" id="stock-quantity-dec" aria-label="Diminuer">−</button>
+            <input type="number" id="stock-quantity" min="1" step="1" required>
+            <button type="button" class="stepper-btn" id="stock-quantity-inc" aria-label="Augmenter">+</button>
+          </div>
+        </label>
         <div class="button-row">
           <button type="button" id="stock-add-btn">Ajouter</button>
           <button type="button" id="stock-remove-btn" class="secondary">Retirer</button>

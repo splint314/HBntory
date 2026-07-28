@@ -206,16 +206,33 @@ function productName(sku) {
   return product ? product.name : "(nom indisponible)";
 }
 
+// Same thresholds as client_web's catalog stock badges — a quick read on
+// branch stock health without adding a formal level to the API.
+function stockLevel(quantity) {
+  if (quantity <= 5) return "low";
+  if (quantity <= 15) return "medium";
+  return "high";
+}
+
+function skeletonRows(tbody, colCount, rowCount = 3) {
+  const cell = '<td><span class="skeleton"></span></td>';
+  tbody.innerHTML = Array.from(
+    { length: rowCount },
+    () => `<tr aria-hidden="true">${cell.repeat(colCount)}</tr>`,
+  ).join("");
+}
+
 async function loadStock() {
-  const items = await api("/api/stock");
   const tbody = document.querySelector("#stock-table tbody");
+  skeletonRows(tbody, 3);
+  const items = await api("/api/stock");
   tbody.innerHTML = "";
   for (const item of items) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(item.product_sku)}</td>
       <td>${escapeHtml(productName(item.product_sku))}</td>
-      <td>${item.quantity}</td>
+      <td><span class="quantity-cell" data-level="${stockLevel(item.quantity)}">${item.quantity}</span></td>
     `;
     tbody.appendChild(tr);
   }
@@ -261,6 +278,16 @@ document.getElementById("stock-remove-btn").addEventListener("click", () => {
   submitStockChange("/api/stock/remove");
 });
 
+const stockQuantityInput = document.getElementById("stock-quantity");
+document.getElementById("stock-quantity-dec").addEventListener("click", () => {
+  const value = Math.max(1, (parseInt(stockQuantityInput.value, 10) || 1) - 1);
+  stockQuantityInput.value = value;
+});
+document.getElementById("stock-quantity-inc").addEventListener("click", () => {
+  const value = (parseInt(stockQuantityInput.value, 10) || 0) + 1;
+  stockQuantityInput.value = value;
+});
+
 // ---------------------------------------------------------------------------
 // Admin: users
 // ---------------------------------------------------------------------------
@@ -280,10 +307,11 @@ async function loadBranchesIntoSelect(selectId, selectedId = null) {
 }
 
 async function loadUsers() {
+  const tbody = document.querySelector("#users-table tbody");
+  skeletonRows(tbody, 5);
   const [users, branches] = await Promise.all([api("/api/users"), api("/api/branches")]);
   const branchName = (id) => branches.find((b) => b.id === id)?.name ?? "—";
 
-  const tbody = document.querySelector("#users-table tbody");
   tbody.innerHTML = "";
   for (const user of users) {
     const tr = document.createElement("tr");

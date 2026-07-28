@@ -214,6 +214,22 @@ function stockLevel(quantity) {
   return "high";
 }
 
+function renderSkeletonGrid(count = 6) {
+  catalogGridEl.innerHTML = Array.from({ length: count }, () => `
+    <div class="product-card skeleton-card" aria-hidden="true">
+      <span class="skeleton" style="width:35%"></span>
+      <span class="skeleton" style="width:80%"></span>
+      <span class="skeleton" style="width:50%"></span>
+      <span class="card-footer">
+        <span class="skeleton" style="width:30%"></span>
+        <span class="skeleton" style="width:35%"></span>
+      </span>
+    </div>
+  `).join("");
+  hide(catalogStatusEl);
+  show(catalogGridEl);
+}
+
 branchFilterEl.addEventListener("click", (event) => {
   const btn = event.target.closest(".filter-btn");
   if (!btn) return;
@@ -227,11 +243,12 @@ branchFilterEl.addEventListener("click", (event) => {
 
 catalogGridEl.addEventListener("click", (event) => {
   const card = event.target.closest(".product-card");
-  if (!card) return;
+  if (!card || card.classList.contains("skeleton-card")) return;
   askAbout(card.dataset.sku);
 });
 
 async function loadCatalog() {
+  renderSkeletonGrid();
   try {
     const response = await fetch(`${AI_SERVICE_URL}/api/catalog`);
     const isJson = response.headers.get("content-type")?.includes("json");
