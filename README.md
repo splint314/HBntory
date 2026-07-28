@@ -360,8 +360,27 @@ Déroulé suggéré pour la soutenance, avec les données seedées :
 
 ## Fonctionnalités optionnelles implémentées
 
-Aucune des fonctionnalités listées comme optionnelles dans le sujet
-(streaming WebSocket, historique de conversation, agent multi-étapes,
-tests de bout en bout complets) n'a été implémentée — voir
+Trois des objectifs optionnels listés dans le sujet (Task 9) ont été
+implémentés :
+
+- **Docker Compose pour tous les services** — les 5 services (API Produit,
+  Backoffice, Ollama, Service IA, interface cliente) sont conteneurisés
+  dans [docker-compose.yml](docker-compose.yml), avec healthchecks et
+  ordre de démarrage explicite (`depends_on: condition: service_healthy`).
+- **Suite de tests automatisés** — 20 tests `pytest` couvrant
+  authentification, autorisation par rôle et règles de stock
+  (`backoffice/tests/`, voir [Tests](#tests-task-7) ci-dessus). Limité au
+  Backoffice : `product_mcp/`, `ai_service/` et `client_web/` n'ont que des
+  scripts de test manuels.
+- **Meilleur style d'interface** — thème clair/sombre (`prefers-color-scheme`
+  + bascule manuelle persistée), design monochrome avec accents de marque,
+  panneau catalogue avec filtre par branche, sur le Backoffice et
+  `client_web`.
+
+Le reste des objectifs optionnels (streaming WebSocket, historique de
+conversation, rôle SuperAdmin, journaux d'audit, historique des mouvements
+de stock, documentation OpenAPI pour nos propres services, rate limiting,
+déploiement cloud) n'a pas été implémenté — voir
 [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
-§3.3 pour la liste et la justification du choix de rester sur le MVP.
+§3.3 pour la justification du choix de rester sur le MVP au-delà de ces
+trois ajouts.
