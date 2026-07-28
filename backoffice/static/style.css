@@ -257,6 +257,127 @@ main {
 
 .login-card h2 { text-align: center; margin-bottom: 1.1rem; }
 
+.login-role-toggle {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.25rem;
+  margin-bottom: 1.25rem;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+}
+
+.role-toggle-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.5rem 0.6rem;
+  border-radius: calc(var(--radius-sm) - 4px);
+}
+.role-toggle-btn:hover { background: transparent; filter: none; color: var(--ink); }
+.role-toggle-btn.active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+input[readonly] {
+  background: var(--surface-sunken);
+  color: var(--ink-soft);
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------------
+   Role banner (shown once logged in — admin vs common, see app.js render())
+   ------------------------------------------------------------------- */
+
+.role-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: 900px;
+  margin: 0 auto 1.1rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.88rem;
+  animation: fade-in-up var(--med) both;
+}
+.role-banner svg { width: 1.1rem; height: 1.1rem; flex: none; }
+.role-banner .role-icon-admin,
+.role-banner .role-icon-common { display: none; }
+
+.role-banner[data-role="admin"] {
+  border-color: var(--brand-1);
+  color: var(--brand-1);
+}
+.role-banner[data-role="admin"] .role-icon-admin { display: block; }
+
+.role-banner[data-role="common"] {
+  border-color: var(--brand-teal);
+  color: var(--brand-teal);
+}
+.role-banner[data-role="common"] .role-icon-common { display: block; }
+
+/* ---------------------------------------------------------------------
+   Section nav + dashboard (per-role landing page, see app.js switchView())
+   ------------------------------------------------------------------- */
+
+.view-nav {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-btn {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.65rem 0.1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.nav-btn:hover { background: transparent; filter: none; color: var(--ink); }
+.nav-btn.active { color: var(--ink); border-bottom-color: var(--brand-1); }
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  animation: fade-in-up var(--med) both;
+}
+
+.stat-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.stat-card[data-tone="warn"] .stat-value { color: var(--danger); }
+
 /* ---------------------------------------------------------------------
    Forms
    ------------------------------------------------------------------- */

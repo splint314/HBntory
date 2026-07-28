@@ -115,6 +115,71 @@ modal.addEventListener("click", (event) => {
 });
 
 // ---------------------------------------------------------------------------
+// Login role toggle — purely a UX shortcut, not a real auth mode: the API
+// only ever checks username+password (see app.py). Since the subject fixes
+// the admin account to a single username ("admin"), picking "Administrateur"
+// just locks that in so nobody has to type or mistype it.
+// ---------------------------------------------------------------------------
+
+document.querySelectorAll(".role-toggle-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".role-toggle-btn").forEach((b) => {
+      b.classList.toggle("active", b === btn);
+      b.setAttribute("aria-pressed", String(b === btn));
+    });
+    const usernameInput = document.getElementById("login-username");
+    if (btn.dataset.role === "admin") {
+      usernameInput.value = "admin";
+      usernameInput.readOnly = true;
+      document.getElementById("login-password").focus();
+    } else {
+      usernameInput.value = "";
+      usernameInput.readOnly = false;
+      usernameInput.focus();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Section navigation (dashboard <-> the actual management page), per role.
+// ---------------------------------------------------------------------------
+
+function switchView(navId, pages, view) {
+  const nav = document.getElementById(navId);
+  for (const btn of nav.querySelectorAll(".nav-btn")) {
+    btn.classList.toggle("active", btn.dataset.view === view);
+  }
+  for (const [key, el] of Object.entries(pages)) {
+    el.classList.toggle("hidden", key !== view);
+  }
+}
+
+function setupViewNav(navId, pages) {
+  document.getElementById(navId).addEventListener("click", (event) => {
+    const btn = event.target.closest(".nav-btn");
+    if (!btn) return;
+    switchView(navId, pages, btn.dataset.view);
+  });
+}
+
+const commonPages = {
+  dashboard: document.getElementById("common-page-dashboard"),
+  stock: document.getElementById("common-page-stock"),
+};
+const adminPages = {
+  dashboard: document.getElementById("admin-page-dashboard"),
+  users: document.getElementById("admin-page-users"),
+};
+setupViewNav("common-nav", commonPages);
+setupViewNav("admin-nav", adminPages);
+document.getElementById("go-to-stock-btn").addEventListener("click", () => {
+  switchView("common-nav", commonPages, "stock");
+});
+document.getElementById("go-to-users-btn").addEventListener("click", () => {
+  switchView("admin-nav", adminPages, "users");
+});
+
+// ---------------------------------------------------------------------------
 // Session / login
 // ---------------------------------------------------------------------------
 
@@ -132,6 +197,7 @@ async function render() {
     hide("common-view");
     hide("admin-view");
     hide("user-info");
+    hide("role-banner");
     show("login-view");
     document.getElementById("login-username").focus();
     return;
@@ -139,19 +205,27 @@ async function render() {
 
   hide("login-view");
   show("user-info");
+  show("role-banner");
   document.getElementById("user-label").textContent =
     `${state.me.username} (${state.me.role})`;
+
+  const banner = document.getElementById("role-banner");
+  banner.dataset.role = state.me.role;
+  document.getElementById("role-banner-text").textContent =
+    state.me.role === "admin"
+      ? "Connecté en tant qu'Administrateur"
+      : `Connecté en tant qu'Utilisateur — Branche ${state.me.branch_name ?? "?"}`;
 
   if (state.me.role === "admin") {
     hide("common-view");
     show("admin-view");
+    switchView("admin-nav", adminPages, "dashboard");
     await loadUsers();
     await loadBranchesIntoSelect("new-branch");
   } else {
     hide("admin-view");
     show("common-view");
-    document.getElementById("branch-banner").textContent =
-      `Branche : ${state.me.branch_name ?? "?"}`;
+    switchView("common-nav", commonPages, "dashboard");
     await loadProducts();
     await loadStock();
   }
@@ -237,6 +311,12 @@ async function loadStock() {
     tbody.appendChild(tr);
   }
   document.getElementById("stock-empty").classList.toggle("hidden", items.length > 0);
+
+  document.getElementById("stat-common-skus").textContent = items.length;
+  document.getElementById("stat-common-units").textContent =
+    items.reduce((sum, item) => sum + item.quantity, 0);
+  document.getElementById("stat-common-low").textContent =
+    items.filter((item) => stockLevel(item.quantity) === "low").length;
 }
 
 document.getElementById("check-form").addEventListener("submit", async (e) => {
@@ -347,6 +427,10 @@ async function loadUsers() {
     tr.appendChild(actionsTd);
     tbody.appendChild(tr);
   }
+
+  document.getElementById("stat-admin-users").textContent =
+    users.filter((u) => u.is_active).length;
+  document.getElementById("stat-admin-branches").textContent = branches.length;
 }
 
 function reportAdmin(message, ok) {
