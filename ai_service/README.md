@@ -18,13 +18,17 @@ the same regardless of which model enforces it).
 
 ```bash
 # Install Ollama (https://ollama.com) and pull a tool-calling-capable model:
-ollama pull llama3.2
+ollama pull llama3.1:8b
 
 cd ai_service
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-cp .env.example .env   # defaults already point at localhost:11434 / llama3.2
+cp .env.example .env   # defaults already point at localhost:11434 / llama3.1:8b
 ```
+
+`AI_MODEL=llama3.2` (3B, `ollama pull llama3.2`) is a faster but less
+reliable alternative — see the manual test evidence below for the
+concrete difference in tool-selection reliability between the two.
 
 Also requires `product_mcp/` to have its own venv set up (see
 [product_mcp/README.md](../product_mcp/README.md)) — this service launches
@@ -195,34 +199,106 @@ get_product_details(unknown) isError: True
 MCP connectivity: OK
 ```
 
-**Full agent loop, exercised end-to-end against Ollama (`llama3.2`)** via
-`curl -X POST /api/ask`, tool calls confirmed in the `hbntory.agent` log
-for each (never invented — every fact traces back to a logged tool
-result):
+**Full agent loop, exercised end-to-end against Ollama**, tool calls
+confirmed in the `hbntory.agent` log for each (never invented — every
+fact traces back to a logged tool result):
 
 | Question | Tool called | Answer |
 |---|---|---|
 | Quels sont les détails du produit HB-LAP-1001 ? | `get_product_details({'identifier': 'HB-LAP-1001'})` | "Le produit HB-LAP-1001 est une laptop Holberton Student Laptop 14 ... 799 USD ... 1,35 kg" — matches the real catalog entry exactly (price, weight). |
-| Quelles branches ont du stock du produit HB-KBD-4102 ? | `get_branches_with_product_tool({'product_sku': 'HB-KBD-4102'})` | Cites Lyon and quantity 25, matching the tool result exactly — phrasing is a little disjointed (small-model trade-off, §2.4), but the data is correct. |
+| Quelles branches ont du stock du produit HB-KBD-4102 ? | `get_branches_with_product_tool({'product_sku': 'HB-KBD-4102'})` | Cites Lyon and quantity 25, matching the tool result exactly. |
 | As-tu du stock pour un produit qui n'existe pas, XYZ-0000 ? | `get_product_details({'identifier': 'XYZ-0000'})` | "Désolé, je n'ai pas trouvé de stock pour le produit XYZ-0000 car il ne semble pas exister dans notre catalogue." — correctly declines instead of inventing a product. |
 
-Observed latency: **1-3 minutes per question**, even with the model
-already loaded (`keep_alive: "30m"` on every request) — CPU-only local
-inference, see
+Observed latency: with `llama3.1:8b` (current default), 2-8 seconds per
+question in this environment, model already loaded (`keep_alive: "30m"`
+on every request). The team also measured **1-3 minutes per question**
+with CPU-only inference on other hardware — see
 [docs/architecture_and_planning.md](../docs/architecture_and_planning.md)
-§2.4. A cold start (model not yet loaded) adds up to another ~90s.
+§2.4. Actual latency depends heavily on the machine; a cold start (model
+not yet loaded) adds on top either way.
 
-**Also observed — a genuine small-model limitation, not a bug:** for
-"Quels produits sont disponibles dans la branche Lyon ?", the model first
-called `list_products_tool(limit=100)` (fetching the entire 39-product
-catalog — unnecessary for this question) before correctly calling
-`get_stock_by_branch_tool({'branch_name': 'Lyon'})`. That extra round
-trip pushed a single Ollama call past `REQUEST_TIMEOUT_SECONDS` (240s),
-and the request correctly surfaced as `503 agent_unavailable` (the fix
-below) rather than hanging or crashing — but no final answer was
-produced for that specific run. Re-running the same question can succeed
-or hit the same detour; a smaller model is not perfectly consistent
-about which tool to call first (§2.4's accepted trade-off).
+### Tool-selection reliability: why the default model changed (2026-07-27)
+
+Two real failure modes were found while testing "Quels produits sont
+disponibles dans la branche Lyon/Paris ?" — both are documented here
+instead of hidden, per the project's own "never hide what's unavailable"
+principle applied to our own limitations:
+
+**1. Wrong tool entirely, with `llama3.2` (3B).** The model called
+`list_products_tool` (the whole 39-product catalog, no branch filter)
+instead of `get_stock_by_branch_tool`, then presented the entire catalog
+as if it were that branch's stock — a real grounding failure (data came
+from a real tool call, but the wrong one for the question asked).
+Mitigation applied: `product_mcp/server.py`'s tool docstrings now
+explicitly warn against this (`list_products_tool` says "do NOT use this
+for branch stock questions"; `get_stock_by_branch_tool` says "this is the
+only correct tool for branch stock questions"). This fixed the Lyon case
+but not consistently: retesting "Paris" afterward, the model still picked
+`list_products_tool`, this time with an invalid `limit: None` argument,
+got a validation error back, and produced a confused answer telling the
+end user to call the tool themselves. **The 3B model's tool selection
+stayed unreliable even after the fix.**
+
+**2. Correct tools, wrong arithmetic, with `llama3.1:8b`.** Retesting the
+same branch questions with the larger model, tool selection was correct
+and consistent in every trial. But a shopping-list question ("5 unités de
+HB-KBD-4102 et 10 unités de HB-MON-2101, quelle branche peut tout
+fournir ?") exposed a different bug: the model called the right tools
+(`get_branches_with_product_tool` per item) and got the right raw data
+(Lyon has only 5 units of HB-MON-2101, not the 10 requested), but then
+concluded "Lyon a en stock suffisamment" — an arithmetic/comparison
+error over real data, not an invented fact. **Neither model is fully
+reliable at the quantity-comparison question type (Task 5.1 #4)**; this
+is called out as a known limitation in the main
+[README.md](../README.md#limitations-connues) rather than silently
+accepted.
+
+**Decision:** default `AI_MODEL` switched from `llama3.2` to
+`llama3.1:8b` — clearly more reliable at tool selection in every retest
+run, at the cost of a larger download and (on slower hardware) higher
+latency. `llama3.2` remains available via `AI_MODEL=llama3.2` for a
+faster but less reliable demo.
+
+### Follow-up retest with `llama3.1:8b` (2026-07-27, later)
+
+A fuller retest of all five example questions surfaced two more findings,
+one fixed, one accepted as an unresolved limitation:
+
+**3. Fixed — product question misread as a branch question.** "As-tu du
+stock pour un produit qui n'existe pas, XYZ-0000 ?" made the model call
+`get_stock_by_branch_tool({'branch_name': 'un'})` — it read the French
+indefinite article "un" as if it were a branch name, instead of
+recognizing the SKU `XYZ-0000` and calling `get_product_details`.
+Grounded (the tool really did error on an unknown branch), but not
+useful. **Mitigation applied:** `SYSTEM_PROMPT` now spells out that
+`branch_name` must be a real branch name (never a word guessed from
+grammar) and explicitly redirects "does this product exist" phrasing to
+`get_product_details` regardless of how the question is worded.
+Retested: fixed, correct answer.
+
+**4. Still unresolved — shopping-list quantity comparison.** Same
+question as before ("5 unités de HB-KBD-4102 et 10 unités de
+HB-MON-2101, quelle branche peut tout fournir ?"), retested against the
+strengthened prompt (explicit "a branch only qualifies if it meets every
+item's quantity" rule added). Result: **still wrong**, and in a new way.
+The model called the right tools first and got the right data (Lyon:
+25 KBD / 5 MON, Paris: 12 MON), but then made several more tool calls
+with garbage arguments — literally `get_stock_by_branch_tool({'branch_name':
+'[branches résultat 1]'})`, a template placeholder passed as a literal
+string instead of a real value — before running low on tool turns and
+answering "Lyon a suffisamment" anyway, still wrong (Lyon only has 5 of
+the 10 units needed).
+
+Two independent prompt-engineering attempts have now failed to fix this
+question type reliably. **Decision: stop iterating on the prompt for
+this case and document it as a known, unresolved limitation** (see
+[README.md](../README.md#limitations-connues)) rather than keep chasing
+it — comparing exact quantities across multiple items is an arithmetic
+task, and prompt wording changes have not made either model reliable at
+it. The most likely real fix would be to have `agent.py` perform the
+quantity comparison itself in Python once it has the tool results,
+rather than asking the LLM to do the arithmetic — not implemented here,
+left as a documented next step rather than an accepted silent gap.
 
 Error paths, also tested directly:
 

@@ -124,4 +124,4 @@ has **not** been performed in this environment (no display/browser
 available here) — the request/response logic for both panels was verified
 against the live `ai_service` REST API with `curl` instead. Recommend a
 manual browser pass once Ollama has pulled a model (`ollama pull
-llama3.2`).
+llama3.1:8b`).

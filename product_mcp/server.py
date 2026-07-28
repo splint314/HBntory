@@ -93,6 +93,12 @@ def list_products_tool(
     tags. Use `category`, `min_price`, `max_price` to narrow results.
     Discontinued products are excluded unless include_discontinued=True.
     Results are paginated: `limit` (max 100) and `offset` control the page.
+
+    This tool has NO branch filter and returns catalog data only, never
+    stock quantities per branch. Do NOT use it to answer "what is in stock
+    at branch X" — that would incorrectly present the whole catalog as
+    that branch's stock. Use get_stock_by_branch_tool for any question
+    about a specific branch's stock.
     """
     if limit < 1 or limit > 100:
         raise ToolError("limit must be between 1 and 100.")
@@ -177,6 +183,10 @@ def get_stock_by_branch_tool(branch_name: str) -> BranchStockResult:
     Get the stock (product SKU + quantity, only items with quantity > 0)
     held in one branch, looked up by its exact name. Use list_branches_tool
     first if you are not sure of the exact branch name.
+
+    This is the only correct tool for "what is in stock at branch X"
+    questions. It only returns SKUs, not product names — if the question
+    needs names too, call get_product_details for each SKU returned here.
     """
     branch_name = branch_name.strip()
     if not branch_name:

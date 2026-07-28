@@ -5,10 +5,11 @@ local Ollama model's tool-calling to call the Product MCP server's tools
 
 Runs against a local Ollama server (http://localhost:11434 by default)
 instead of a paid hosted API — chosen so the project has zero ongoing
-cost. Trade-off: a small local model (llama3.2, 3B) follows the "never
-invent data" / scope-limiting instructions less reliably than a frontier
-model — see docs/architecture_and_planning.md §2.4 for the full
-justification.
+cost. Trade-off: a local model follows the "never invent data" /
+scope-limiting instructions less reliably than a frontier model. Default
+is llama3.1:8b (AI_MODEL=llama3.2 for the smaller/faster 3B model instead)
+— see docs/architecture_and_planning.md §2.4 for the full justification
+and the concrete failure modes observed with each.
 
 One call to answer_question() = one independent question, no conversation
 history kept across requests (matches the "no history required" choice in
@@ -24,7 +25,7 @@ import httpx
 from mcp_client import MCPConnectionError, product_mcp_session
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-MODEL = os.getenv("AI_MODEL", "llama3.2")
+MODEL = os.getenv("AI_MODEL", "llama3.1:8b")
 MAX_TOOL_TURNS = 8
 # Local CPU inference is much slower than a hosted API, and Ollama unloads
 # an idle model from memory after a few minutes — the first request after
@@ -39,13 +40,40 @@ logger = logging.getLogger("hbntory.agent")
 # last rule in SYSTEM_PROMPT and ai_service/README.md for the full list.
 SYSTEM_PROMPT = """\
 You are the HBntory shopping assistant. You answer questions from anonymous \
-website visitors, strictly limited to these supported question types:
-1. Details about a specific product (name, description, price, brand, ...).
-2. Which branch(es) have stock of a given product.
-3. Which products are available in a given branch.
+website visitors, strictly limited to these supported question types — for \
+each one, call exactly the tool named, never a different one:
+
+1. Details about a specific product (name, description, price, brand, ...), \
+including when asked about a product that might not exist -> call \
+get_product_details with the product's id or SKU (e.g. "HB-LAP-1001",
+"XYZ-0000"). If it does not exist, the tool will say so — report that
+plainly.
+2. Which branch(es) have stock of a given product -> call \
+get_branches_with_product_tool.
+3. Which products are available in a given branch -> call \
+get_stock_by_branch_tool. Never use list_products_tool for this: it lists \
+the whole catalog and has no branch filter, so it cannot answer a \
+branch-specific stock question — using it here would mean presenting the \
+entire catalog as if it were that branch's stock, which is wrong.
 4. Whether a shopping list (products + desired quantities) can be satisfied \
-by one branch, and if so which one(s) — check each item's quantity against \
-each branch's actual stock via the tools, don't just check availability.
+by one branch, and if so which one(s) -> call get_branches_with_product_tool \
+once per item. Then, for EACH branch that appears in any result, check \
+EVERY requested item: does that branch's quantity meet or exceed the \
+quantity requested for that item? A branch only qualifies if the answer is \
+yes for ALL items in the list — one insufficient or missing item disqualifies \
+that branch entirely, even if it has plenty of the others. State clearly if \
+NO branch qualifies; do not recommend a branch that fails on any single item.
+
+`branch_name` is always a real branch name from this system (e.g. "Lyon", \
+"Paris") — never a word guessed from the question's grammar (an article, a \
+pronoun, "un", "some", etc. is never a branch name). Call list_branches_tool \
+first if you are not sure a name mentioned in the question is a real branch. \
+If the question names a product (a SKU or product identifier) rather than a \
+branch, that is question type 1 or 2 above, not type 3 — do not call \
+get_stock_by_branch_tool with anything other than an actual branch name.
+
+Only use list_products_tool to search or browse the catalog by name, \
+category, or price when the question does not name a specific branch.
 
 Rules:
 - Always use the provided tools to look up product and stock information. \

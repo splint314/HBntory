@@ -30,7 +30,7 @@ services:
   # No API key, no per-token cost (student project, no budget for a paid
   # LLM API — see docs/architecture_and_planning.md §2.4). Pull a model
   # once after the first `docker compose up`:
-  #   docker compose exec ollama ollama pull llama3.2
+  #   docker compose exec ollama ollama pull llama3.1:8b
   ollama:
     image: ollama/ollama:latest
     container_name: hbntory-ollama
@@ -52,7 +52,7 @@ services:
     environment:
       # DNS name on the Compose network — the ollama service above.
       OLLAMA_HOST: "http://ollama:11434"
-      AI_MODEL: "llama3.2"
+      AI_MODEL: "llama3.1:8b"
       PRODUCT_API_URL: "http://external-products-api:5000"
       # Same SQLite file as the Backoffice, mounted read-only below: the
       # MCP stock tools open it with mode=ro regardless, this is

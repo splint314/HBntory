@@ -70,7 +70,7 @@ docker compose up --build
 
 # Une fois démarré, récupérer le modèle local (une seule fois, persisté
 # dans le volume ollama_data — pas besoin de le refaire au prochain lancement) :
-docker compose exec ollama ollama pull llama3.2
+docker compose exec ollama ollama pull llama3.1:8b
 ```
 
 Démarre, dans l'ordre des dépendances : l'API Produit externe
@@ -185,7 +185,7 @@ Nécessite [Ollama](https://ollama.com/download) installé sur la machine
 conteneur).
 
 ```bash
-ollama pull llama3.2   # une seule fois — LLM local, gratuit, voir ai_service/README.md
+ollama pull llama3.1:8b   # une seule fois — LLM local, gratuit, voir ai_service/README.md
 
 cd ai_service
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
@@ -202,7 +202,7 @@ d'erreurs, observabilité des appels d'outils :
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `OLLAMA_HOST` | URL du serveur Ollama local | `http://localhost:11434` |
-| `AI_MODEL` | Modèle Ollama utilisé par l'agent | `llama3.2` |
+| `AI_MODEL` | Modèle Ollama utilisé par l'agent (`llama3.2` : 3B, plus rapide mais moins fiable pour choisir le bon outil — voir §2.4) | `llama3.1:8b` |
 | `AI_SERVICE_PORT` | Port d'écoute du service | `5002` |
 | `PRODUCT_API_URL` | URL de l'API Produit (transmise au serveur MCP) | `http://localhost:5001` |
 | `DATABASE_URL` | URL de la DB SQLite (transmise au serveur MCP, lecture seule) | `sqlite:///../backoffice/hbntory.db` |
@@ -248,7 +248,7 @@ Aucune authentification requise. Questions d'exemple documentées :
 | Admin ne peut pas gérer le stock | `tests/test_api_stock.py` |
 | Détails produit obtenus depuis l'API externe | `product_mcp/README.md` (test manuel) |
 | L'IA répond où un produit est disponible | `ai_service/README.md` (vérifié en direct, réponse correcte) |
-| L'IA répond quels produits sont disponibles dans une branche | `ai_service/README.md` (vérifié en direct — un essai a dépassé le délai à cause d'un détour du modèle, correctement renvoyé en 503 plutôt qu'un crash) |
+| L'IA répond quels produits sont disponibles dans une branche | `ai_service/README.md` (vérifié en direct ; a révélé un vrai problème de choix d'outil avec le petit modèle, corrigé partiellement puis résolu en passant à `llama3.1:8b` par défaut — voir "Tool-selection reliability" dans `ai_service/README.md`) |
 | L'IA répond clairement pour un produit inconnu | `ai_service/README.md` (vérifié en direct, réponse correcte) |
 | L'IA répond clairement quand l'information est indisponible | idem |
 
@@ -281,8 +281,8 @@ Aucune authentification requise. Questions d'exemple documentées :
 ## Problèmes courants
 
 - **`/api/ask` répond 503 "agent_unavailable"** : Ollama n'a pas encore le
-  modèle — `ollama pull llama3.2` (ou `docker compose exec ollama ollama
-  pull llama3.2` en Docker), voir §2.4 de
+  modèle — `ollama pull llama3.1:8b` (ou `docker compose exec ollama ollama
+  pull llama3.1:8b` en Docker), voir §2.4 de
   [docs/architecture_and_planning.md](docs/architecture_and_planning.md).
 - **"invalid credentials" dans l'UI du Backoffice alors que l'API répond
   OK en `curl`** : autofill du navigateur avec un mauvais mot de passe —
@@ -304,14 +304,38 @@ Aucune authentification requise. Questions d'exemple documentées :
 - Le lien Backoffice ↔ `product_mcp` se fait via le fichier SQLite partagé
   (chemin relatif) plutôt qu'un vrai contrat d'API interne — fonctionne en
   local, fragile si les deux services tournent sur des machines séparées.
-- **Latence de l'agent IA** : 1 à 3 minutes par question en pratique
-  (inférence CPU locale via Ollama, modèle déjà chargé) — acceptable pour
-  une démonstration mais pas pour de la production. Voir
-  [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+- **Latence de l'agent IA** : de quelques secondes à plusieurs minutes par
+  question selon la machine (inférence CPU locale via Ollama, modèle déjà
+  chargé) — acceptable pour une démonstration mais pas pour de la
+  production. Voir [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
   §2.4 et [ai_service/README.md](ai_service/README.md) pour le détail des
   tests effectués (boucle complète vérifiée de bout en bout, réponses
   correctement fondées sur les données réelles de l'API Produit et du
   stock).
+- **Choix d'outil peu fiable avec le petit modèle (`llama3.2`, 3B)** :
+  observé en train de répondre à une question sur le stock d'une branche
+  en listant tout le catalogue au lieu d'interroger cette branche
+  précisément. Un correctif (descriptions d'outils plus explicites dans
+  `product_mcp/server.py`) aide mais ne garantit rien à 100 % avec ce
+  modèle — d'où le passage à `llama3.1:8b` par défaut, nettement plus
+  fiable sur ce point dans nos tests. Détail complet :
+  [ai_service/README.md](ai_service/README.md#tool-selection-reliability-why-the-default-model-changed-2026-07-27).
+- **Comparaison de quantités pas toujours fiable, même avec `llama3.1:8b`** :
+  sur une question de type liste de courses multi-produits, le modèle a
+  appelé les bons outils et obtenu les bonnes quantités, mais a mal
+  comparé quantité demandée vs quantité disponible et conclu à tort
+  qu'une branche pouvait tout fournir. Les données restaient réelles (pas
+  d'invention), l'erreur est arithmétique/logique, pas un cas d'hallucination
+  de données. **Deux tentatives de renforcement du prompt système ont
+  échoué à corriger ça de façon fiable** (la deuxième a même vu le modèle
+  appeler un outil avec un placeholder de template au lieu d'une vraie
+  valeur) — décision d'arrêter d'itérer sur le prompt et de documenter la
+  limite plutôt que de continuer à la chasser. La vraie correction
+  probable serait de faire calculer la comparaison de quantités par du
+  code Python dans `agent.py` une fois les données d'outils récupérées,
+  plutôt que de la confier au LLM — pas implémenté, laissé comme piste.
+  Détail complet et logs :
+  [ai_service/README.md](ai_service/README.md#follow-up-retest-with-llama31-8b-2026-07-27-later).
 - Pas de test automatisé du rendu visuel de `client_web` dans un vrai
   navigateur (logique JS vérifiée contre l'API réelle via `curl`).
 - Une seule langue de réponse suivie (celle de la question), pas de
