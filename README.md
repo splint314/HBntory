@@ -22,7 +22,7 @@ communication, MVP) :
 | `product_api/` | Catalogue fournisseur externe, vendored, lecture seule, non modifié | fourni |
 | `product_mcp/` | Serveur MCP : outils produit (catalogue) + stock (lecture seule de la DB Backoffice) pour l'agent IA | Task 4-5, fait |
 | `ai_service/` | Service IA : reçoit une question, l'agent (LLM local via Ollama, tool-use) appelle le serveur MCP, renvoie une réponse | Task 5, fait |
-| `client_web/` | Page publique statique, sans authentification, qui pose des questions au Service IA | Task 6, fait |
+| `client_web/` | Page publique statique : assistant en langage naturel sans authentification (Service IA) + catalogue réservé aux comptes Backoffice (login cross-origin) | Task 6, fait |
 | Base de données relationnelle | SQLite (fichier partagé, lu en écriture par le Backoffice et en lecture seule par `product_mcp`) | fait |
 
 Task 7 (vérification finale, tests critiques, conteneurisation complète,
@@ -35,6 +35,7 @@ voir les sections [Tests](#tests-task-7) et
 ```
 client_web  --REST-->  ai_service  --MCP (stdio)-->  product_mcp  --HTTP-->  product_api
                                                             \--SQLite (mode=ro)--> hbntory.db
+client_web  --REST (auth only, cross-origin)-->  backoffice
 backoffice  <--SQLAlchemy-->  hbntory.db
 backoffice  --HTTP-->  product_api
 ```
@@ -48,8 +49,13 @@ backoffice  --HTTP-->  product_api
   `mode=ro`) et n'a aucune notion d'authentification (il ne fait que lire).
 - Le **Service IA** ne connaît ni la base de données ni l'API Produit
   directement : tout passe par le serveur MCP, en client MCP standard.
-- L'**interface cliente** est anonyme et ne parle qu'au Service IA, jamais
-  directement au Backoffice ni à la base.
+- L'**interface cliente** reste anonyme pour l'assistant (exigence du
+  sujet) et ne parle qu'au Service IA pour les questions. Le catalogue
+  (bonus, hors périmètre obligatoire) est réservé aux comptes Backoffice :
+  `client_web` appelle directement `/api/login`, `/api/me`, `/api/logout`
+  du Backoffice en cross-origin (CORS restreint à ces trois routes, voir
+  [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+  §2.2) — jamais la base de données directement.
 
 Détails par service : [docs/database_design.md](docs/database_design.md),
 [docs/authentication_and_authorization.md](docs/authentication_and_authorization.md),
