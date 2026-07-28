@@ -98,6 +98,27 @@ démarrage peut prendre plusieurs minutes le temps du téléchargement
 (~4.7 Go pour `llama3.1:8b`) ; le healthcheck d'`ai-service` tolère ce délai
 (`start_period: 600s`) avant de considérer le conteneur en échec.
 
+### Option A bis — `launch_all.sh` (sans Docker)
+
+Si Docker n'est pas disponible (ex. WSL sans intégration Docker Desktop),
+[launch_all.sh](launch_all.sh) automatise l'Option B ci-dessous : il lance
+les 5 services dans l'ordre, attend que chacun réponde avant de lancer le
+suivant (pas de `sleep` à l'aveugle), démarre Ollama et vérifie/télécharge
+le modèle si besoin, et seed la base une seule fois si elle n'existe pas
+encore.
+
+Prérequis : les `.venv` de `backoffice/`, `product_mcp/` et `ai_service/`
+déjà créés (voir Option B, étapes 2-4, section installation des
+dépendances uniquement) et [Ollama](https://ollama.com/download) installé.
+
+```bash
+./launch_all.sh          # lance tout, affiche les URLs, Ctrl+C arrête tout
+./launch_all.sh stop     # arrête tout depuis un autre terminal
+```
+
+Logs par service dans `run-logs/` (ignoré par git), PIDs suivis dans
+`run-logs/pids` pour un arrêt propre même après un crash.
+
 ### Option B — Chaque service manuellement
 
 #### 1. API Produit externe

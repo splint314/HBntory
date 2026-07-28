@@ -11,9 +11,10 @@
 | `README.md` | Point d'entrée du dépôt : état du projet, lancement (Docker et sans Docker), variables d'environnement, routes de l'API. |
 | `CLAUDE.md` | Guide destiné à un assistant IA (Claude Code) travaillant sur ce dépôt : architecture, conventions, rôle de chaque module. |
 | `LANCEMENT.md` | Aide-mémoire personnel pour lancer tous les services (gitignored, pas dans le dépôt partagé). |
+| `launch_all.sh` | Lance les 5 services sans Docker (ordre + health-checks), pour quand Docker n'est pas disponible. Voir README.md "Option A bis". |
 | `INDEX.md` | Ce fichier. |
 | `docker-compose.yml` | Lance l'API Produit externe et le Backoffice ensemble (services `external-products-api` + `backoffice`, volume `backoffice_data` pour la persistance SQLite). |
-| `.gitignore` | Exclut `.venv/`, `__pycache__/`, `*.pyc`, `*.db`, `.env`, `LANCEMENT.md`. |
+| `.gitignore` | Exclut `.venv/`, `__pycache__/`, `*.pyc`, `*.db`, `.env`, `LANCEMENT.md`, `run-logs/`. |
 
 ## `docs/` — documentation du projet
 
