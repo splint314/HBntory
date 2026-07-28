@@ -113,6 +113,8 @@
         Aucune connexion requise.
       </p>
 
+      <div id="chat-thread" class="chat-thread" aria-live="polite"></div>
+
       <form id="ask-form">
         <label for="question">Votre question</label>
         <div class="input-row">
@@ -122,8 +124,10 @@
             name="question"
             placeholder="Ex : quelles branches ont du stock du produit HB-LAP-1001 ?"
             autocomplete="off"
+            maxlength="500"
             required
           >
+          <span id="question-count" class="char-count">0/500</span>
           <button type="submit" id="submit-btn">
             <span>Envoyer</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -132,14 +136,8 @@
             </svg>
           </button>
         </div>
+        <p class="hint">Une réponse peut prendre 1 à 3 minutes (modèle local) — vous pouvez annuler à tout moment.</p>
       </form>
-
-      <div id="loading" class="hidden" aria-live="polite">
-        <span class="status-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-        Recherche en cours…
-      </div>
-      <div id="error" class="hidden" role="alert"></div>
-      <div id="answer" class="hidden" aria-live="polite"></div>
 
       <div class="examples">
         <h3>Exemples de questions</h3>

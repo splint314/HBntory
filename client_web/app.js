@@ -66,46 +66,183 @@ themeToggle.addEventListener("click", () => {
 const form = document.getElementById("ask-form");
 const input = document.getElementById("question");
 const submitBtn = document.getElementById("submit-btn");
-const loadingEl = document.getElementById("loading");
-const errorEl = document.getElementById("error");
-const answerEl = document.getElementById("answer");
+const questionCountEl = document.getElementById("question-count");
+const threadEl = document.getElementById("chat-thread");
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const question = input.value.trim();
-  if (!question) return;
+input.addEventListener("input", () => {
+  questionCountEl.textContent = `${input.value.length}/500`;
+  questionCountEl.classList.toggle("warn", input.value.length > 450);
+});
 
-  hide(errorEl);
-  hide(answerEl);
-  show(loadingEl);
-  submitBtn.disabled = true;
+// A real question against the local LLM takes 1-3 minutes (see
+// ai_service/README.md) — this cycles through the sentence so the wait
+// reads as "working" rather than "frozen", and the elapsed-time counter
+// gives an honest sense of how long it's actually been.
+const PENDING_MESSAGES = [
+  "Consultation du catalogue…",
+  "Vérification de la disponibilité en stock…",
+  "Réflexion en cours…",
+  "Rédaction de la réponse…",
+];
+
+let turnSeq = 0;
+const turns = [];
+
+function turnById(id) { return turns.find((t) => t.id === id); }
+
+function renderThread() {
+  threadEl.innerHTML = turns.map(renderTurn).join("");
+}
+
+function renderTurn(turn) {
+  const userMsg = `
+    <div class="chat-msg user">
+      <div class="chat-bubble">${escapeHtml(turn.question)}</div>
+    </div>`;
+
+  let assistantMsg;
+  if (turn.status === "pending") {
+    assistantMsg = `
+      <div class="chat-msg assistant" data-turn="${turn.id}" data-status="pending">
+        <span class="chat-avatar" aria-hidden="true"></span>
+        <div class="chat-bubble chat-pending">
+          <span class="status-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="chat-pending-text">${escapeHtml(turn.pendingText)}</span>
+        </div>
+        <div class="chat-meta">
+          <span class="chat-elapsed">${turn.elapsed}s</span>
+          <button type="button" class="chat-action-btn chat-cancel-btn" data-turn="${turn.id}">Annuler</button>
+        </div>
+      </div>`;
+  } else if (turn.status === "error") {
+    assistantMsg = `
+      <div class="chat-msg assistant" data-turn="${turn.id}" data-status="error">
+        <span class="chat-avatar" aria-hidden="true"></span>
+        <div class="chat-bubble chat-error" role="alert">${escapeHtml(turn.error)}</div>
+        <div class="chat-meta">
+          <button type="button" class="chat-action-btn chat-retry-btn" data-turn="${turn.id}">Réessayer</button>
+        </div>
+      </div>`;
+  } else {
+    assistantMsg = `
+      <div class="chat-msg assistant" data-turn="${turn.id}" data-status="done">
+        <span class="chat-avatar" aria-hidden="true"></span>
+        <div class="chat-bubble">${escapeHtml(turn.answer)}</div>
+        <div class="chat-meta">
+          <span>Répondu en ${turn.duration}s</span>
+          <button type="button" class="chat-action-btn chat-copy-btn" data-turn="${turn.id}">Copier</button>
+        </div>
+      </div>`;
+  }
+  return userMsg + assistantMsg;
+}
+
+function scrollToTurn(id) {
+  threadEl.querySelector(`[data-turn="${id}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function runTurn(turn) {
+  const controller = new AbortController();
+  turn.controller = controller;
+  const startedAt = performance.now();
+  let messageIndex = 0;
+
+  const tick = () => {
+    turn.elapsed = Math.floor((performance.now() - startedAt) / 1000);
+    const el = threadEl.querySelector(`[data-turn="${turn.id}"]`);
+    if (!el) return;
+    const elapsedEl = el.querySelector(".chat-elapsed");
+    if (elapsedEl) elapsedEl.textContent = `${turn.elapsed}s`;
+    if (turn.elapsed > 0 && turn.elapsed % 8 === 0) {
+      messageIndex = (messageIndex + 1) % PENDING_MESSAGES.length;
+      turn.pendingText = PENDING_MESSAGES[messageIndex];
+      const textEl = el.querySelector(".chat-pending-text");
+      if (textEl) textEl.textContent = turn.pendingText;
+    }
+  };
+  turn.timer = setInterval(tick, 1000);
 
   try {
     const response = await fetch(`${AI_SERVICE_URL}/api/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question: turn.question }),
+      signal: controller.signal,
     });
 
     const isJson = response.headers.get("content-type")?.includes("json");
     const body = isJson ? await response.json().catch(() => null) : null;
 
     if (!response.ok) {
-      const message = body?.message || `La requête a échoué (${response.status}).`;
-      throw new Error(message);
+      throw new Error(body?.message || `La requête a échoué (${response.status}).`);
     }
 
-    answerEl.textContent = body.answer;
-    show(answerEl);
+    turn.status = "done";
+    turn.answer = body.answer;
+    turn.duration = Math.round((performance.now() - startedAt) / 1000);
   } catch (err) {
-    const message = err instanceof TypeError
-      ? "Impossible de joindre le service. Vérifiez qu'il est bien démarré."
-      : err.message;
-    errorEl.textContent = message;
-    show(errorEl);
+    if (err.name === "AbortError") {
+      turn.status = "error";
+      turn.error = "Question annulée.";
+    } else {
+      turn.status = "error";
+      turn.error = err instanceof TypeError
+        ? "Impossible de joindre le service. Vérifiez qu'il est bien démarré."
+        : err.message;
+    }
   } finally {
-    hide(loadingEl);
-    submitBtn.disabled = false;
+    clearInterval(turn.timer);
+    submitBtn.disabled = turns.some((t) => t.status === "pending");
+    renderThread();
+  }
+}
+
+function submitQuestion(question) {
+  const turn = {
+    id: ++turnSeq,
+    question,
+    status: "pending",
+    pendingText: PENDING_MESSAGES[0],
+    elapsed: 0,
+  };
+  turns.push(turn);
+  submitBtn.disabled = true;
+  renderThread();
+  scrollToTurn(turn.id);
+  runTurn(turn);
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = "";
+  questionCountEl.textContent = "0/500";
+  submitQuestion(question);
+});
+
+threadEl.addEventListener("click", (event) => {
+  const cancelBtn = event.target.closest(".chat-cancel-btn");
+  if (cancelBtn) {
+    turnById(Number(cancelBtn.dataset.turn))?.controller.abort();
+    return;
+  }
+  const retryBtn = event.target.closest(".chat-retry-btn");
+  if (retryBtn) {
+    const turn = turnById(Number(retryBtn.dataset.turn));
+    if (turn) submitQuestion(turn.question);
+    return;
+  }
+  const copyBtn = event.target.closest(".chat-copy-btn");
+  if (copyBtn) {
+    const turn = turnById(Number(copyBtn.dataset.turn));
+    if (!turn) return;
+    navigator.clipboard?.writeText(turn.answer).then(() => {
+      const original = copyBtn.textContent;
+      copyBtn.textContent = "Copié !";
+      setTimeout(() => { copyBtn.textContent = original; }, 1500);
+    });
   }
 });
 
@@ -116,11 +253,13 @@ document.getElementById("example-list").addEventListener("click", (event) => {
   const li = event.target.closest("li");
   if (!li) return;
   input.value = li.textContent.trim();
+  input.dispatchEvent(new Event("input"));
   input.focus();
 });
 
 function askAbout(sku) {
   input.value = `Quels sont les détails du produit ${sku} ?`;
+  input.dispatchEvent(new Event("input"));
   document.getElementById("assistant-heading")
     .scrollIntoView({ behavior: "smooth", block: "start" });
   input.focus();
