@@ -168,6 +168,8 @@
           publique (Service IA), pas de connexion supplémentaire requise.
         </p>
 
+        <div id="assistant-thread" class="chat-thread" aria-live="polite"></div>
+
         <form id="assistant-form">
           <label for="assistant-question">Votre question</label>
           <div class="input-row">
@@ -176,23 +178,17 @@
               id="assistant-question"
               placeholder="Ex : quelles branches ont du stock du produit HB-LAP-1001 ?"
               autocomplete="off"
+              maxlength="500"
               required
             >
+            <span id="assistant-question-count" class="char-count">0/500</span>
             <button type="submit" id="assistant-submit-btn">Envoyer</button>
           </div>
+          <p class="hint">
+            Une réponse peut prendre 1 à 3 minutes (modèle local, voir
+            <code>ai_service/README.md</code>) — vous pouvez annuler à tout moment.
+          </p>
         </form>
-
-        <div id="assistant-loading" class="hidden status">
-          <span class="status-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          Recherche en cours…
-        </div>
-        <p id="assistant-error" class="error hidden" role="alert"></p>
-        <div id="assistant-answer" class="hidden answer-box" aria-live="polite"></div>
-
-        <p class="hint" style="margin-top:1rem">
-          Une réponse peut prendre 1 à 3 minutes (modèle local, voir
-          <code>ai_service/README.md</code>).
-        </p>
       </div>
     </div>
   </section>

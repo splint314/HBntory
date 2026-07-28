@@ -410,25 +410,107 @@ const AI_SERVICE_URL =
   new URLSearchParams(window.location.search).get("api") ||
   "http://127.0.0.1:5002";
 
-document.getElementById("assistant-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const question = document.getElementById("assistant-question").value.trim();
-  if (!question) return;
+const assistantForm = document.getElementById("assistant-form");
+const assistantInput = document.getElementById("assistant-question");
+const assistantSubmitBtn = document.getElementById("assistant-submit-btn");
+const assistantCountEl = document.getElementById("assistant-question-count");
+const assistantThreadEl = document.getElementById("assistant-thread");
 
-  const errorEl = document.getElementById("assistant-error");
-  const answerEl = document.getElementById("assistant-answer");
-  const submitBtn = document.getElementById("assistant-submit-btn");
+assistantInput.addEventListener("input", () => {
+  assistantCountEl.textContent = `${assistantInput.value.length}/500`;
+  assistantCountEl.classList.toggle("warn", assistantInput.value.length > 450);
+});
 
-  hide("assistant-error");
-  hide("assistant-answer");
-  show("assistant-loading");
-  submitBtn.disabled = true;
+// A real question against the local LLM takes 1-3 minutes (see
+// ai_service/README.md) — cycling this reassures the user the request is
+// progressing rather than stuck, and the elapsed counter is an honest
+// read on how long it's actually been.
+const ASSISTANT_PENDING_MESSAGES = [
+  "Consultation du catalogue…",
+  "Vérification de la disponibilité en stock…",
+  "Réflexion en cours…",
+  "Rédaction de la réponse…",
+];
+
+let assistantTurnSeq = 0;
+const assistantTurns = [];
+
+function assistantTurnById(id) { return assistantTurns.find((t) => t.id === id); }
+
+function renderAssistantThread() {
+  assistantThreadEl.innerHTML = assistantTurns.map(renderAssistantTurn).join("");
+}
+
+function renderAssistantTurn(turn) {
+  const userMsg = `
+    <div class="chat-msg user">
+      <div class="chat-bubble">${escapeHtml(turn.question)}</div>
+    </div>`;
+
+  let assistantMsg;
+  if (turn.status === "pending") {
+    assistantMsg = `
+      <div class="chat-msg assistant" data-turn="${turn.id}" data-status="pending">
+        <span class="chat-avatar" aria-hidden="true"></span>
+        <div class="chat-bubble chat-pending">
+          <span class="status-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="chat-pending-text">${escapeHtml(turn.pendingText)}</span>
+        </div>
+        <div class="chat-meta">
+          <span class="chat-elapsed">${turn.elapsed}s</span>
+          <button type="button" class="chat-action-btn chat-cancel-btn" data-turn="${turn.id}">Annuler</button>
+        </div>
+      </div>`;
+  } else if (turn.status === "error") {
+    assistantMsg = `
+      <div class="chat-msg assistant" data-turn="${turn.id}" data-status="error">
+        <span class="chat-avatar" aria-hidden="true"></span>
+        <div class="chat-bubble chat-error" role="alert">${escapeHtml(turn.error)}</div>
+        <div class="chat-meta">
+          <button type="button" class="chat-action-btn chat-retry-btn" data-turn="${turn.id}">Réessayer</button>
+        </div>
+      </div>`;
+  } else {
+    assistantMsg = `
+      <div class="chat-msg assistant" data-turn="${turn.id}" data-status="done">
+        <span class="chat-avatar" aria-hidden="true"></span>
+        <div class="chat-bubble">${escapeHtml(turn.answer)}</div>
+        <div class="chat-meta">
+          <span>Répondu en ${turn.duration}s</span>
+          <button type="button" class="chat-action-btn chat-copy-btn" data-turn="${turn.id}">Copier</button>
+        </div>
+      </div>`;
+  }
+  return userMsg + assistantMsg;
+}
+
+async function runAssistantTurn(turn) {
+  const controller = new AbortController();
+  turn.controller = controller;
+  const startedAt = performance.now();
+  let messageIndex = 0;
+
+  const tick = () => {
+    turn.elapsed = Math.floor((performance.now() - startedAt) / 1000);
+    const el = assistantThreadEl.querySelector(`[data-turn="${turn.id}"]`);
+    if (!el) return;
+    const elapsedEl = el.querySelector(".chat-elapsed");
+    if (elapsedEl) elapsedEl.textContent = `${turn.elapsed}s`;
+    if (turn.elapsed > 0 && turn.elapsed % 8 === 0) {
+      messageIndex = (messageIndex + 1) % ASSISTANT_PENDING_MESSAGES.length;
+      turn.pendingText = ASSISTANT_PENDING_MESSAGES[messageIndex];
+      const textEl = el.querySelector(".chat-pending-text");
+      if (textEl) textEl.textContent = turn.pendingText;
+    }
+  };
+  turn.timer = setInterval(tick, 1000);
 
   try {
     const response = await fetch(`${AI_SERVICE_URL}/api/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question: turn.question }),
+      signal: controller.signal,
     });
     const isJson = response.headers.get("content-type")?.includes("json");
     const body = isJson ? await response.json().catch(() => null) : null;
@@ -437,17 +519,72 @@ document.getElementById("assistant-form").addEventListener("submit", async (e) =
       throw new Error(body?.message || `La requête a échoué (${response.status}).`);
     }
 
-    answerEl.textContent = body.answer;
-    show("assistant-answer");
+    turn.status = "done";
+    turn.answer = body.answer;
+    turn.duration = Math.round((performance.now() - startedAt) / 1000);
   } catch (err) {
-    const message = err instanceof TypeError
-      ? "Impossible de joindre le Service IA. Vérifiez qu'il est bien démarré."
-      : err.message;
-    errorEl.textContent = message;
-    show("assistant-error");
+    if (err.name === "AbortError") {
+      turn.status = "error";
+      turn.error = "Question annulée.";
+    } else {
+      turn.status = "error";
+      turn.error = err instanceof TypeError
+        ? "Impossible de joindre le Service IA. Vérifiez qu'il est bien démarré."
+        : err.message;
+    }
   } finally {
-    hide("assistant-loading");
-    submitBtn.disabled = false;
+    clearInterval(turn.timer);
+    assistantSubmitBtn.disabled = assistantTurns.some((t) => t.status === "pending");
+    renderAssistantThread();
+  }
+}
+
+function submitAssistantQuestion(question) {
+  const turn = {
+    id: ++assistantTurnSeq,
+    question,
+    status: "pending",
+    pendingText: ASSISTANT_PENDING_MESSAGES[0],
+    elapsed: 0,
+  };
+  assistantTurns.push(turn);
+  assistantSubmitBtn.disabled = true;
+  renderAssistantThread();
+  assistantThreadEl.querySelector(`[data-turn="${turn.id}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  runAssistantTurn(turn);
+}
+
+assistantForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const question = assistantInput.value.trim();
+  if (!question) return;
+  assistantInput.value = "";
+  assistantCountEl.textContent = "0/500";
+  submitAssistantQuestion(question);
+});
+
+assistantThreadEl.addEventListener("click", (event) => {
+  const cancelBtn = event.target.closest(".chat-cancel-btn");
+  if (cancelBtn) {
+    assistantTurnById(Number(cancelBtn.dataset.turn))?.controller.abort();
+    return;
+  }
+  const retryBtn = event.target.closest(".chat-retry-btn");
+  if (retryBtn) {
+    const turn = assistantTurnById(Number(retryBtn.dataset.turn));
+    if (turn) submitAssistantQuestion(turn.question);
+    return;
+  }
+  const copyBtn = event.target.closest(".chat-copy-btn");
+  if (copyBtn) {
+    const turn = assistantTurnById(Number(copyBtn.dataset.turn));
+    if (!turn) return;
+    navigator.clipboard?.writeText(turn.answer).then(() => {
+      const original = copyBtn.textContent;
+      copyBtn.textContent = "Copié !";
+      setTimeout(() => { copyBtn.textContent = original; }, 1500);
+    });
   }
 });
 

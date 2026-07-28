@@ -780,18 +780,105 @@ tr:hover .role-badge, tr:hover .status-badge { transform: scale(1.04); }
 .input-row { display: flex; gap: 0.5rem; }
 .input-row input { flex: 1; min-width: 0; }
 
-.answer-box {
-  white-space: pre-wrap;
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--brand-1);
-  border-radius: var(--radius-sm);
-  padding: 1rem;
-  margin-top: 0.75rem;
+.char-count {
+  align-self: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.char-count.warn { color: var(--danger); font-weight: 600; }
+
+/* ---------------------------------------------------------------------
+   Chat thread (assistant conversation — see app.js runAssistantTurn()/
+   renderAssistantTurn()). Shared markup/class vocabulary with
+   client_web/style.css's copy of this component.
+   ------------------------------------------------------------------- */
+
+.chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  margin-bottom: 1.1rem;
+}
+.chat-thread:empty { display: none; margin: 0; }
+
+.chat-msg {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.55rem;
+  animation: rise-in var(--med) both;
+}
+
+.chat-msg.user { justify-content: flex-end; }
+
+.chat-msg.assistant { flex-wrap: wrap; justify-content: flex-start; }
+
+.chat-avatar {
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--brand-gradient);
+}
+
+.chat-bubble {
+  max-width: min(32rem, 78%);
+  padding: 0.7rem 0.95rem;
+  border-radius: var(--radius);
   background: var(--surface-sunken);
+  border: 1px solid var(--border);
   font-size: 0.92rem;
   line-height: 1.55;
-  animation: rise-in var(--slow) both;
+  white-space: pre-wrap;
 }
+
+.chat-msg.user .chat-bubble {
+  background: var(--brand-gradient);
+  color: #fff;
+  border-color: transparent;
+  border-bottom-right-radius: 4px;
+  box-shadow: var(--shadow-glow);
+}
+
+.chat-msg.assistant .chat-bubble { border-bottom-left-radius: 4px; }
+
+.chat-pending { display: flex; align-items: center; gap: 0.55rem; color: var(--muted); }
+.chat-pending-text { font-variant-numeric: tabular-nums; }
+
+.chat-error { color: var(--danger); background: var(--danger-bg); border-color: var(--danger); }
+
+.chat-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-basis: 100%;
+  margin-left: calc(1.75rem + 0.55rem);
+  margin-top: 0.3rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.chat-elapsed { font-variant-numeric: tabular-nums; }
+
+.chat-action-btn {
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: none;
+  transition: background-color var(--fast), color var(--fast), border-color var(--fast), transform var(--fast);
+}
+.chat-action-btn::before { display: none; }
+.chat-action-btn:hover { background: var(--surface-sunken); filter: none; }
+.chat-action-btn:active { transform: scale(0.95); }
+.chat-cancel-btn:hover { border-color: var(--danger); color: var(--danger); }
+.chat-retry-btn:hover, .chat-copy-btn:hover { border-color: var(--brand-1); color: var(--brand-1); }
 
 /* Toast-style feedback: app.js only ever sets .textContent + .className on
    these, so every bit of the slide-in/icon/border treatment below is pure
