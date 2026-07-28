@@ -88,6 +88,7 @@
     <nav class="view-nav" id="common-nav">
       <button type="button" class="nav-btn active" data-view="dashboard">Tableau de bord</button>
       <button type="button" class="nav-btn" data-view="stock">Gestion du stock</button>
+      <button type="button" class="nav-btn" data-view="assistant">Assistant produits</button>
     </nav>
 
     <div id="common-page-dashboard" class="view-page">
@@ -153,6 +154,43 @@
           </div>
         </form>
         <p id="stock-message"></p>
+      </div>
+    </div>
+
+    <div id="common-page-assistant" class="view-page hidden">
+      <div class="panel">
+        <h2>Assistant produits</h2>
+        <p class="hint">
+          Posez une question en langage naturel sur le catalogue ou la
+          disponibilité en stock — le même assistant que celui de la page
+          publique (Service IA), pas de connexion supplémentaire requise.
+        </p>
+
+        <form id="assistant-form">
+          <label for="assistant-question">Votre question</label>
+          <div class="input-row">
+            <input
+              type="text"
+              id="assistant-question"
+              placeholder="Ex : quelles branches ont du stock du produit HB-LAP-1001 ?"
+              autocomplete="off"
+              required
+            >
+            <button type="submit" id="assistant-submit-btn">Envoyer</button>
+          </div>
+        </form>
+
+        <div id="assistant-loading" class="hidden status">
+          <span class="status-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          Recherche en cours…
+        </div>
+        <p id="assistant-error" class="error hidden" role="alert"></p>
+        <div id="assistant-answer" class="hidden answer-box" aria-live="polite"></div>
+
+        <p class="hint" style="margin-top:1rem">
+          Une réponse peut prendre 1 à 3 minutes (modèle local, voir
+          <code>ai_service/README.md</code>).
+        </p>
       </div>
     </div>
   </section>

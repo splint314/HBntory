@@ -19,6 +19,15 @@ async function api(path, options = {}) {
   const isJson = response.headers.get("content-type")?.includes("json");
   const body = isJson ? await response.json().catch(() => null) : null;
   if (!response.ok) {
+    // A 401/403 on anything other than the session check itself usually
+    // means the session cookie changed under this tab — e.g. logging into
+    // client_web's catalog gate as a different account, which shares the
+    // same browser cookie for this origin. Resync so the UI reflects who
+    // is actually authenticated instead of just failing against a stale
+    // cached role (avoid path === "/api/me" to not recurse into itself).
+    if ((response.status === 401 || response.status === 403) && path !== "/api/me") {
+      refreshSession();
+    }
     const message = body?.error || `Request failed (${response.status})`;
     throw new Error(message);
   }
@@ -165,6 +174,7 @@ function setupViewNav(navId, pages) {
 const commonPages = {
   dashboard: document.getElementById("common-page-dashboard"),
   stock: document.getElementById("common-page-stock"),
+  assistant: document.getElementById("common-page-assistant"),
 };
 const adminPages = {
   dashboard: document.getElementById("admin-page-dashboard"),
@@ -366,6 +376,56 @@ document.getElementById("stock-quantity-dec").addEventListener("click", () => {
 document.getElementById("stock-quantity-inc").addEventListener("click", () => {
   const value = (parseInt(stockQuantityInput.value, 10) || 0) + 1;
   stockQuantityInput.value = value;
+});
+
+// ---------------------------------------------------------------------------
+// Common user: product assistant (same ai_service /api/ask contract as
+// client_web — no separate account, just the Service IA REST API).
+// ---------------------------------------------------------------------------
+
+const AI_SERVICE_URL =
+  new URLSearchParams(window.location.search).get("api") ||
+  "http://127.0.0.1:5002";
+
+document.getElementById("assistant-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const question = document.getElementById("assistant-question").value.trim();
+  if (!question) return;
+
+  const errorEl = document.getElementById("assistant-error");
+  const answerEl = document.getElementById("assistant-answer");
+  const submitBtn = document.getElementById("assistant-submit-btn");
+
+  hide("assistant-error");
+  hide("assistant-answer");
+  show("assistant-loading");
+  submitBtn.disabled = true;
+
+  try {
+    const response = await fetch(`${AI_SERVICE_URL}/api/ask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    const isJson = response.headers.get("content-type")?.includes("json");
+    const body = isJson ? await response.json().catch(() => null) : null;
+
+    if (!response.ok) {
+      throw new Error(body?.message || `La requête a échoué (${response.status}).`);
+    }
+
+    answerEl.textContent = body.answer;
+    show("assistant-answer");
+  } catch (err) {
+    const message = err instanceof TypeError
+      ? "Impossible de joindre le Service IA. Vérifiez qu'il est bien démarré."
+      : err.message;
+    errorEl.textContent = message;
+    show("assistant-error");
+  } finally {
+    hide("assistant-loading");
+    submitBtn.disabled = false;
+  }
 });
 
 // ---------------------------------------------------------------------------
