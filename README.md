@@ -57,12 +57,19 @@ backoffice  --HTTP-->  product_api
   [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
   §2.2) — jamais la base de données directement.
 
-Détails par service : [docs/database_design.md](docs/database_design.md),
-[docs/authentication_and_authorization.md](docs/authentication_and_authorization.md),
-[docs/backoffice_ui.md](docs/backoffice_ui.md),
-[product_mcp/README.md](product_mcp/README.md),
+Détails par service (un document par task) :
+[docs/database_design.md](docs/database_design.md) (Task 1),
+[docs/authentication_and_authorization.md](docs/authentication_and_authorization.md) (Task 2),
+[docs/backoffice_ui.md](docs/backoffice_ui.md) (Task 3),
+[docs/product_mcp_server.md](docs/product_mcp_server.md) (Task 4),
+[docs/ai_query_service.md](docs/ai_query_service.md) (Task 5),
+[docs/client_web_interface.md](docs/client_web_interface.md) (Task 6),
+[docs/integration_testing.md](docs/integration_testing.md) (Task 7) —
+chacun renvoie vers le README technique du service concerné
+([product_mcp/README.md](product_mcp/README.md),
 [ai_service/README.md](ai_service/README.md),
-[client_web/README.md](client_web/README.md).
+[client_web/README.md](client_web/README.md)) pour le détail complet et
+les logs de test.
 
 ## Installation et lancement
 
@@ -251,6 +258,9 @@ Aucune authentification requise. Questions d'exemple documentées :
 [client_web/README.md](client_web/README.md).
 
 ## Tests (Task 7)
+
+Vue d'ensemble de l'intégration et du plan de test :
+[docs/integration_testing.md](docs/integration_testing.md).
 
 - `backoffice/tests/` — suite automatisée `pytest` (auth, autorisation par
   rôle, règles de stock — voir la liste des scénarios ci-dessous) :
