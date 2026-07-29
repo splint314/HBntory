@@ -323,6 +323,17 @@ function quantityForSku(sku) {
   return state.stock.find((s) => s.product_sku === sku)?.quantity ?? 0;
 }
 
+// Loading placeholder for the (still table-based) admin users list —
+// distinct from skeletonCards() above, which is specific to the stock
+// catalog's card grid.
+function skeletonRows(tbody, colCount, rowCount = 3) {
+  const cell = '<td><span class="skeleton"></span></td>';
+  tbody.innerHTML = Array.from(
+    { length: rowCount },
+    () => `<tr aria-hidden="true">${cell.repeat(colCount)}</tr>`,
+  ).join("");
+}
+
 function updateCommonStats() {
   const items = state.stock;
   animateCount(document.getElementById("stat-common-skus"), items.length);
