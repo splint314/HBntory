@@ -309,18 +309,11 @@ input:focus-visible,
    ------------------------------------------------------------------- */
 
 main {
-  max-width: 1100px;
+  max-width: 900px;
   margin: 0 auto;
   padding: clamp(1.25rem, 4vw, 2.5rem);
   display: grid;
   gap: clamp(1.5rem, 4vw, 2.5rem);
-}
-
-@media (min-width: 960px) {
-  main {
-    grid-template-columns: 1.6fr 1fr;
-    align-items: start;
-  }
 }
 
 .panel {
@@ -331,7 +324,58 @@ main {
   animation: rise-in var(--slow) both;
 }
 
-.assistant { animation-delay: 90ms; }
+.catalog { animation-delay: 90ms; }
+
+/* ---------------------------------------------------------------------
+   Assistant hero — the flagship feature gets the top of the page, a
+   gradient frame and a badge, rather than sharing a row with the catalog.
+   ------------------------------------------------------------------- */
+
+.hero-assistant {
+  position: relative;
+  padding: clamp(1.75rem, 5vw, 3rem) clamp(1.5rem, 5vw, 2.5rem);
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    var(--brand-gradient-wide) border-box;
+  box-shadow: var(--shadow-glow);
+}
+
+.hero-head {
+  text-align: center;
+  max-width: 42rem;
+  margin: 0 auto 1.5rem;
+}
+
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  background: var(--brand-gradient);
+  color: #fff;
+  margin-bottom: 0.9rem;
+  box-shadow: var(--shadow-glow);
+  animation: float 5s ease-in-out infinite;
+}
+.ai-badge svg { width: 0.85rem; height: 0.85rem; }
+
+.hero-head h2 {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-assistant .assistant-intro { margin: 0; }
 
 .panel h2 {
   margin: 0;
@@ -350,8 +394,63 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.catalog-count {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.catalog-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   margin-bottom: 1.1rem;
 }
+
+.search-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+#catalog-search {
+  width: 100%;
+  padding-left: 2.35rem;
+}
+
+/* Stock color legend — the same three colors that mark .stock-badge and
+   .quantity-cell everywhere, spelled out once so nobody has to guess what
+   the dot means. */
+.stock-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.stock-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.legend-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+.legend-dot[data-level="high"] { color: var(--brand-teal); }
+.legend-dot[data-level="medium"] { color: var(--brand-1); }
+.legend-dot[data-level="low"] { color: var(--danger); }
 
 .branch-filter {
   display: flex;
@@ -841,6 +940,27 @@ button[type="submit"]:disabled { opacity: 0.5; cursor: default; }
 .examples li:hover::after {
   opacity: 1;
   transform: translateX(0);
+}
+
+/* Chip variant (client_web's hero assistant) — same list, laid out as
+   wrapping pill suggestions instead of a stacked, full-width list. */
+.example-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.example-chips li {
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.45rem 0.95rem;
+  background: var(--surface-sunken);
+}
+.example-chips li::after { display: none; }
+.example-chips li:hover {
+  background: var(--brand-gradient);
+  color: #fff;
+  border-color: transparent;
+  transform: translateY(-2px);
 }
 
 /* ---------------------------------------------------------------------

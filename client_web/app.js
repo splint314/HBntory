@@ -92,6 +92,9 @@ function turnById(id) { return turns.find((t) => t.id === id); }
 
 function renderThread() {
   threadEl.innerHTML = turns.map(renderTurn).join("");
+  // The suggestion chips are an onboarding nudge for a first-time visitor —
+  // once a real conversation exists they'd just be clutter under it.
+  document.getElementById("examples-block").classList.toggle("hidden", turns.length > 0);
 }
 
 function renderTurn(turn) {
@@ -272,9 +275,13 @@ function askAbout(sku) {
 const catalogStatusEl = document.getElementById("catalog-status");
 const catalogGridEl = document.getElementById("catalog-grid");
 const branchFilterEl = document.getElementById("branch-filter");
+const catalogControlsEl = document.getElementById("catalog-controls");
+const catalogSearchEl = document.getElementById("catalog-search");
+const catalogCountEl = document.getElementById("catalog-count");
 
 let catalogBranches = [];
 let activeBranch = "all";
+let activeSearch = "";
 
 function formatPrice(item) {
   if (item.unit_price == null) return null;
@@ -311,6 +318,18 @@ function productsForActiveBranch() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Client-side only — the catalog is already fully loaded, so filtering by
+// name or SKU as the user types needs no round trip.
+function visibleProducts() {
+  const products = productsForActiveBranch();
+  if (!activeSearch) return products;
+  return products.filter(
+    (item) =>
+      item.name.toLowerCase().includes(activeSearch) ||
+      item.sku.toLowerCase().includes(activeSearch),
+  );
+}
+
 function renderFilters() {
   const branchButtons = catalogBranches
     .map((b) => {
@@ -323,14 +342,19 @@ function renderFilters() {
 }
 
 function renderGrid() {
-  const products = productsForActiveBranch();
+  const totalForBranch = productsForActiveBranch().length;
+  const products = visibleProducts();
 
   if (products.length === 0) {
     catalogGridEl.innerHTML = "";
-    catalogStatusEl.textContent = "Aucun produit en stock pour cette sélection.";
+    catalogStatusEl.textContent = activeSearch
+      ? `Aucun produit ne correspond à « ${activeSearch} ».`
+      : "Aucun produit en stock pour cette sélection.";
     catalogStatusEl.classList.remove("is-error");
     show(catalogStatusEl);
     hide(catalogGridEl);
+    catalogCountEl.textContent = "0 produit";
+    show(catalogCountEl);
     return;
   }
 
@@ -338,7 +362,11 @@ function renderGrid() {
     const price = formatPrice(item);
     const sku = escapeHtml(item.sku);
     const badges = item.stocks
-      .map((s) => `<span class="stock-badge" data-level="${stockLevel(s.quantity)}">${escapeHtml(s.branch)} · ${s.quantity}</span>`)
+      .map((s) => {
+        const level = stockLevel(s.quantity);
+        const title = `${escapeHtml(s.branch)} : ${stockLevelLabel(level)} (${s.quantity} unité${s.quantity > 1 ? "s" : ""})`;
+        return `<span class="stock-badge" data-level="${level}" title="${title}">${escapeHtml(s.branch)} · ${s.quantity}</span>`;
+      })
       .join("");
     return `
       <button type="button" class="product-card" data-sku="${sku}" style="--i:${index}">
@@ -355,6 +383,11 @@ function renderGrid() {
 
   hide(catalogStatusEl);
   show(catalogGridEl);
+
+  catalogCountEl.textContent = activeSearch
+    ? `${products.length} résultat${products.length > 1 ? "s" : ""} sur ${totalForBranch}`
+    : `${products.length} produit${products.length > 1 ? "s" : ""}`;
+  show(catalogCountEl);
 }
 
 // Purely visual (still monochrome — dot fill, not color) — a quick read on
@@ -363,6 +396,12 @@ function stockLevel(quantity) {
   if (quantity <= 5) return "low";
   if (quantity <= 15) return "medium";
   return "high";
+}
+
+function stockLevelLabel(level) {
+  if (level === "low") return "stock faible";
+  if (level === "medium") return "stock limité";
+  return "en stock";
 }
 
 function renderSkeletonGrid(count = 6) {
@@ -389,6 +428,11 @@ branchFilterEl.addEventListener("click", (event) => {
     b.classList.toggle("active", b === btn);
     b.setAttribute("aria-pressed", String(b === btn));
   }
+  renderGrid();
+});
+
+catalogSearchEl.addEventListener("input", () => {
+  activeSearch = catalogSearchEl.value.trim().toLowerCase();
   renderGrid();
 });
 
@@ -443,10 +487,13 @@ const catalogLoginErrorEl = document.getElementById("catalog-login-error");
 
 function showCatalogGate() {
   hide(catalogSessionEl);
-  hide(branchFilterEl);
+  hide(catalogControlsEl);
+  hide(catalogCountEl);
   hide(catalogGridEl);
   hide(catalogStatusEl);
   show(catalogGateEl);
+  activeSearch = "";
+  catalogSearchEl.value = "";
 }
 
 function showCatalogUnlocked(me) {
@@ -457,7 +504,7 @@ function showCatalogUnlocked(me) {
     ? `Connecté : ${me.username} (Administrateur)`
     : `Connecté : ${me.username} — ${me.branch_name ?? "?"}`;
   show(catalogSessionEl);
-  show(branchFilterEl);
+  show(catalogControlsEl);
   loadCatalog();
 }
 

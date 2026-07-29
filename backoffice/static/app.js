@@ -7,7 +7,8 @@
 
 const state = {
   me: null,        // current user, from GET /api/me
-  products: [],     // catalog cache from the Product API, for the SKU dropdown
+  products: [],     // catalog cache from the Product API, for the stock grid
+  stock: [],        // current branch's stock rows, from GET /api/stock
 };
 
 async function api(path, options = {}) {
@@ -203,6 +204,9 @@ setupViewNav("admin-nav", adminPages);
 document.getElementById("go-to-stock-btn").addEventListener("click", () => {
   switchView("common-nav", commonPages, "stock");
 });
+document.getElementById("go-to-assistant-btn").addEventListener("click", () => {
+  switchView("common-nav", commonPages, "assistant");
+});
 document.getElementById("go-to-users-btn").addEventListener("click", () => {
   switchView("admin-nav", adminPages, "users");
 });
@@ -293,19 +297,6 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 async function loadProducts() {
   const data = await api("/api/products?limit=100");
   state.products = data.results || [];
-  const select = document.getElementById("stock-product");
-  select.innerHTML = "";
-  for (const product of state.products) {
-    const option = document.createElement("option");
-    option.value = product.sku;
-    option.textContent = `${product.sku} — ${product.name}`;
-    select.appendChild(option);
-  }
-}
-
-function productName(sku) {
-  const product = state.products.find((p) => p.sku === sku);
-  return product ? product.name : "(nom indisponible)";
 }
 
 // Same thresholds as client_web's catalog stock badges — a quick read on
@@ -316,31 +307,25 @@ function stockLevel(quantity) {
   return "high";
 }
 
-function skeletonRows(tbody, colCount, rowCount = 3) {
-  const cell = '<td><span class="skeleton"></span></td>';
-  tbody.innerHTML = Array.from(
-    { length: rowCount },
-    () => `<tr aria-hidden="true">${cell.repeat(colCount)}</tr>`,
+function skeletonCards(count = 8) {
+  document.getElementById("stock-grid").innerHTML = Array.from(
+    { length: count },
+    () => `
+      <div class="stock-card" aria-hidden="true">
+        <span class="skeleton" style="width:40%"></span>
+        <span class="skeleton" style="width:80%"></span>
+        <span class="skeleton" style="width:55%"></span>
+      </div>
+    `,
   ).join("");
 }
 
-async function loadStock() {
-  const tbody = document.querySelector("#stock-table tbody");
-  skeletonRows(tbody, 3);
-  const items = await api("/api/stock");
-  tbody.innerHTML = "";
-  items.forEach((item, index) => {
-    const tr = document.createElement("tr");
-    tr.style.setProperty("--i", index);
-    tr.innerHTML = `
-      <td>${escapeHtml(item.product_sku)}</td>
-      <td>${escapeHtml(productName(item.product_sku))}</td>
-      <td><span class="quantity-cell" data-level="${stockLevel(item.quantity)}">${item.quantity}</span></td>
-    `;
-    tbody.appendChild(tr);
-  });
-  document.getElementById("stock-empty").classList.toggle("hidden", items.length > 0);
+function quantityForSku(sku) {
+  return state.stock.find((s) => s.product_sku === sku)?.quantity ?? 0;
+}
 
+function updateCommonStats() {
+  const items = state.stock;
   animateCount(document.getElementById("stat-common-skus"), items.length);
   animateCount(
     document.getElementById("stat-common-units"),
@@ -352,53 +337,131 @@ async function loadStock() {
   );
 }
 
-document.getElementById("check-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const sku = document.getElementById("check-sku").value.trim();
-  const resultEl = document.getElementById("check-result");
-  try {
-    const result = await api(`/api/stock/${encodeURIComponent(sku)}`);
-    resultEl.textContent = `${result.product_sku} : ${result.quantity} unité(s) dans votre branche.`;
-    resultEl.className = "success";
-  } catch (err) {
-    resultEl.textContent = err.message;
-    resultEl.className = "error";
-  }
-});
+function formatProductPrice(product) {
+  if (product.unit_price == null) return null;
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: product.currency || "USD",
+  }).format(product.unit_price);
+}
 
-async function submitStockChange(endpoint) {
-  const sku = document.getElementById("stock-product").value;
-  const quantity = parseInt(document.getElementById("stock-quantity").value, 10);
-  const messageEl = document.getElementById("stock-message");
+function renderStockGrid() {
+  const grid = document.getElementById("stock-grid");
+  const query = stockSearchEl.value.trim().toLowerCase();
+  const products = state.products.filter(
+    (p) =>
+      !query ||
+      p.name.toLowerCase().includes(query) ||
+      p.sku.toLowerCase().includes(query),
+  );
+
+  document.getElementById("stock-empty").classList.toggle("hidden", products.length > 0);
+  if (products.length === 0) {
+    grid.innerHTML = "";
+    return;
+  }
+
+  grid.innerHTML = products.map((product, index) => {
+    const sku = escapeHtml(product.sku);
+    const name = escapeHtml(product.name);
+    const quantity = quantityForSku(product.sku);
+    const price = formatProductPrice(product);
+    return `
+      <div class="stock-card" data-sku="${sku}" style="--i:${index}">
+        <span class="category">${escapeHtml(product.category || product.brand || "")}</span>
+        <span class="name">${name}</span>
+        <span class="sku">${sku}</span>
+        <span class="card-footer">
+          ${price ? `<span class="price">${escapeHtml(price)}</span>` : "<span></span>"}
+          <span class="quantity-cell" data-level="${stockLevel(quantity)}">${quantity}</span>
+        </span>
+        <div class="stock-card-controls">
+          <div class="quantity-stepper">
+            <button type="button" class="stepper-btn" data-action="dec" aria-label="Diminuer la quantité — ${name}">−</button>
+            <input type="number" class="stock-card-qty" min="1" step="1" value="1" aria-label="Quantité — ${name}">
+            <button type="button" class="stepper-btn" data-action="inc" aria-label="Augmenter la quantité — ${name}">+</button>
+          </div>
+          <div class="button-row">
+            <button type="button" class="stock-card-add">Ajouter</button>
+            <button type="button" class="stock-card-remove secondary">Retirer</button>
+          </div>
+        </div>
+        <p class="card-message" aria-live="polite"></p>
+      </div>
+    `;
+  }).join("");
+}
+
+async function loadStock() {
+  skeletonCards();
+  state.stock = await api("/api/stock");
+  updateCommonStats();
+  renderStockGrid();
+}
+
+const stockSearchEl = document.getElementById("stock-search");
+stockSearchEl.addEventListener("input", renderStockGrid);
+
+async function submitCardStockChange(card, endpoint) {
+  const sku = card.dataset.sku;
+  const quantityInput = card.querySelector(".stock-card-qty");
+  const quantity = parseInt(quantityInput.value, 10);
+  const addBtn = card.querySelector(".stock-card-add");
+  const removeBtn = card.querySelector(".stock-card-remove");
+  const messageEl = card.querySelector(".card-message");
+
+  addBtn.disabled = true;
+  removeBtn.disabled = true;
   try {
-    await api(endpoint, {
+    const result = await api(endpoint, {
       method: "POST",
       body: JSON.stringify({ product_sku: sku, quantity }),
     });
+
+    const existing = state.stock.find((s) => s.product_sku === sku);
+    if (existing) {
+      existing.quantity = result.quantity;
+    } else {
+      state.stock.push({
+        branch_id: result.branch_id,
+        product_sku: sku,
+        quantity: result.quantity,
+      });
+    }
+    const badge = card.querySelector(".quantity-cell");
+    badge.textContent = result.quantity;
+    badge.dataset.level = stockLevel(result.quantity);
+    updateCommonStats();
+
     messageEl.textContent = "Stock mis à jour.";
-    messageEl.className = "success";
-    await loadStock();
+    messageEl.className = "card-message success";
   } catch (err) {
     messageEl.textContent = err.message;
-    messageEl.className = "error";
+    messageEl.className = "card-message error";
+  } finally {
+    addBtn.disabled = false;
+    removeBtn.disabled = false;
   }
 }
 
-document.getElementById("stock-add-btn").addEventListener("click", () => {
-  submitStockChange("/api/stock/add");
-});
-document.getElementById("stock-remove-btn").addEventListener("click", () => {
-  submitStockChange("/api/stock/remove");
-});
+document.getElementById("stock-grid").addEventListener("click", (event) => {
+  const card = event.target.closest(".stock-card");
+  if (!card) return;
+  const qtyInput = card.querySelector(".stock-card-qty");
 
-const stockQuantityInput = document.getElementById("stock-quantity");
-document.getElementById("stock-quantity-dec").addEventListener("click", () => {
-  const value = Math.max(1, (parseInt(stockQuantityInput.value, 10) || 1) - 1);
-  stockQuantityInput.value = value;
-});
-document.getElementById("stock-quantity-inc").addEventListener("click", () => {
-  const value = (parseInt(stockQuantityInput.value, 10) || 0) + 1;
-  stockQuantityInput.value = value;
+  const stepBtn = event.target.closest(".stepper-btn");
+  if (stepBtn) {
+    const current = parseInt(qtyInput.value, 10) || 1;
+    qtyInput.value = stepBtn.dataset.action === "dec" ? Math.max(1, current - 1) : current + 1;
+    return;
+  }
+  if (event.target.closest(".stock-card-add")) {
+    submitCardStockChange(card, "/api/stock/add");
+    return;
+  }
+  if (event.target.closest(".stock-card-remove")) {
+    submitCardStockChange(card, "/api/stock/remove");
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -89,8 +89,8 @@
   <section id="common-view" class="hidden">
     <nav class="view-nav" id="common-nav">
       <button type="button" class="nav-btn active" data-view="dashboard">Tableau de bord</button>
-      <button type="button" class="nav-btn" data-view="stock">Gestion du stock</button>
       <button type="button" class="nav-btn" data-view="assistant">Assistant produits</button>
+      <button type="button" class="nav-btn" data-view="stock">Gestion du stock</button>
     </nav>
 
     <div id="common-page-dashboard" class="view-page">
@@ -108,55 +108,19 @@
           <span class="stat-label">Stock faible</span>
         </div>
       </div>
-      <button type="button" id="go-to-stock-btn">Gestion du stock →</button>
-    </div>
 
-    <div id="common-page-stock" class="view-page hidden">
-      <div class="panel">
-        <h2>Stock de ma branche</h2>
-        <div class="table-wrap">
-          <table id="stock-table">
-            <thead><tr><th>SKU</th><th>Produit</th><th>Quantité</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <p id="stock-empty" class="hidden status">Aucun produit en stock pour cette branche.</p>
+      <div class="assistant-spotlight">
+        <span class="ai-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2l2.2 6.2L20 10l-5.8 1.8L12 18l-2.2-6.2L4 10l5.8-1.8L12 2Z"/>
+          </svg>
+          Assistant IA local
+        </span>
+        <p>Une question sur le catalogue ou la disponibilité en stock ? Demandez en langage naturel — gratuit, illimité.</p>
+        <button type="button" id="go-to-assistant-btn">Poser une question →</button>
       </div>
 
-      <div class="panel">
-        <h3>Vérifier la quantité d'un produit</h3>
-        <form id="check-form" class="inline-form">
-          <label>SKU <input type="text" id="check-sku" placeholder="ex. HB-LAP-1001" required></label>
-          <button type="submit">Vérifier</button>
-        </form>
-        <p id="check-result"></p>
-      </div>
-
-      <div class="panel">
-        <h3>Ajouter / retirer du stock</h3>
-        <p class="hint">
-          Les produits proviennent du catalogue de l'API Produit externe
-          (nom, description, prix) ; seule la quantité est stockée ici, pour
-          votre branche uniquement.
-        </p>
-        <form id="stock-form">
-          <label>Produit
-            <select id="stock-product" required></select>
-          </label>
-          <label>Quantité
-            <div class="quantity-stepper">
-              <button type="button" class="stepper-btn" id="stock-quantity-dec" aria-label="Diminuer">−</button>
-              <input type="number" id="stock-quantity" min="1" step="1" required>
-              <button type="button" class="stepper-btn" id="stock-quantity-inc" aria-label="Augmenter">+</button>
-            </div>
-          </label>
-          <div class="button-row">
-            <button type="button" id="stock-add-btn">Ajouter</button>
-            <button type="button" id="stock-remove-btn" class="secondary">Retirer</button>
-          </div>
-        </form>
-        <p id="stock-message"></p>
-      </div>
+      <button type="button" id="go-to-stock-btn" class="secondary">Gestion du stock →</button>
     </div>
 
     <div id="common-page-assistant" class="view-page hidden">
@@ -189,6 +153,28 @@
             <code>ai_service/README.md</code>) — vous pouvez annuler à tout moment.
           </p>
         </form>
+      </div>
+    </div>
+
+    <div id="common-page-stock" class="view-page hidden">
+      <div class="panel">
+        <h2>Catalogue &amp; stock de ma branche</h2>
+        <p class="hint">
+          Les produits proviennent du catalogue de l'API Produit externe
+          (nom, description, prix) ; seule la quantité est stockée ici, pour
+          votre branche uniquement.
+        </p>
+
+        <div class="search-row">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="search" id="stock-search" placeholder="Rechercher un produit (nom ou référence)…" autocomplete="off" aria-label="Rechercher un produit">
+        </div>
+
+        <p id="stock-empty" class="hidden status">Aucun produit ne correspond à cette recherche.</p>
+        <div id="stock-grid" class="stock-grid" aria-live="polite"></div>
       </div>
     </div>
   </section>
