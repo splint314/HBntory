@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div class="aurora" aria-hidden="true"></div>
   <header class="site-header">
     <div class="header-inner">
       <div class="brand">
@@ -42,13 +43,82 @@
   </header>
 
   <main>
+    <section class="panel hero-assistant" aria-labelledby="assistant-heading">
+      <div class="hero-head">
+        <span class="ai-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2l2.2 6.2L20 10l-5.8 1.8L12 18l-2.2-6.2L4 10l5.8-1.8L12 2Z"/>
+          </svg>
+          Assistant IA local — gratuit, illimité
+        </span>
+        <h2 id="assistant-heading">Posez votre question sur le catalogue</h2>
+        <p class="assistant-intro">
+          Disponibilité en stock, détails produit, recommandations : demandez,
+          l'assistant cherche dans le catalogue et les branches pour vous.
+          Aucune connexion requise.
+        </p>
+      </div>
+
+      <div id="chat-thread" class="chat-thread" aria-live="polite"></div>
+
+      <form id="ask-form">
+        <label for="question">Votre question</label>
+        <div class="input-row">
+          <input
+            type="text"
+            id="question"
+            name="question"
+            placeholder="Ex : quelles branches ont du stock du produit HB-LAP-1001 ?"
+            autocomplete="off"
+            maxlength="500"
+            required
+          >
+          <span id="question-count" class="char-count">0/500</span>
+          <button type="submit" id="submit-btn">
+            <span>Envoyer</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14"/>
+              <path d="M13 6l6 6-6 6"/>
+            </svg>
+          </button>
+        </div>
+        <p class="hint">Une réponse peut prendre 1 à 3 minutes (modèle local) — vous pouvez annuler à tout moment.</p>
+      </form>
+
+      <div class="examples" id="examples-block">
+        <h3>Suggestions</h3>
+        <ul id="example-list" class="example-chips">
+          <li>Quels sont les détails du produit HB-LAP-1001 ?</li>
+          <li>Quelles branches ont du stock du produit HB-KBD-4102 ?</li>
+          <li>Quels produits sont disponibles dans la branche Lyon ?</li>
+          <li>Je veux équiper un poste de travail complet, que recommandes-tu ?</li>
+        </ul>
+      </div>
+    </section>
+
     <section class="panel catalog" aria-labelledby="catalog-heading">
       <div class="panel-head">
         <h2 id="catalog-heading">Catalogue</h2>
-        <div id="branch-filter" class="branch-filter hidden" role="group" aria-label="Filtrer par branche">
+        <p id="catalog-count" class="catalog-count hidden"></p>
+      </div>
+
+      <div id="catalog-controls" class="catalog-controls hidden">
+        <div class="search-row">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="search" id="catalog-search" placeholder="Rechercher un produit (nom ou référence)…" autocomplete="off">
+        </div>
+        <div id="branch-filter" class="branch-filter" role="group" aria-label="Filtrer par branche">
           <button type="button" class="filter-btn active" data-branch="all" aria-pressed="true">
             Toutes les branches
           </button>
+        </div>
+        <div class="stock-legend" aria-hidden="true">
+          <span><i class="legend-dot" data-level="high"></i>En stock</span>
+          <span><i class="legend-dot" data-level="medium"></i>Stock limité</span>
+          <span><i class="legend-dot" data-level="low"></i>Stock faible</span>
         </div>
       </div>
 
@@ -103,52 +173,6 @@
         Chargement du catalogue…
       </p>
       <div id="catalog-grid" class="catalog-grid hidden"></div>
-    </section>
-
-    <section class="panel assistant" aria-labelledby="assistant-heading">
-      <h2 id="assistant-heading">Assistant produits</h2>
-      <p class="assistant-intro">
-        Posez une question sur le catalogue ou la disponibilité en stock.
-        Aucune connexion requise.
-      </p>
-
-      <form id="ask-form">
-        <label for="question">Votre question</label>
-        <div class="input-row">
-          <input
-            type="text"
-            id="question"
-            name="question"
-            placeholder="Ex : quelles branches ont du stock du produit HB-LAP-1001 ?"
-            autocomplete="off"
-            required
-          >
-          <button type="submit" id="submit-btn">
-            <span>Envoyer</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M5 12h14"/>
-              <path d="M13 6l6 6-6 6"/>
-            </svg>
-          </button>
-        </div>
-      </form>
-
-      <div id="loading" class="hidden" aria-live="polite">
-        <span class="status-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-        Recherche en cours…
-      </div>
-      <div id="error" class="hidden" role="alert"></div>
-      <div id="answer" class="hidden" aria-live="polite"></div>
-
-      <div class="examples">
-        <h3>Exemples de questions</h3>
-        <ul id="example-list">
-          <li>Quels sont les détails du produit HB-LAP-1001 ?</li>
-          <li>Quelles branches ont du stock du produit HB-KBD-4102 ?</li>
-          <li>Quels produits sont disponibles dans la branche Lyon ?</li>
-          <li>Je veux équiper un poste de travail complet, que recommandes-tu ?</li>
-        </ul>
-      </div>
     </section>
   </main>
 

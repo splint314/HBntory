@@ -9,6 +9,8 @@
 </head>
 <body>
 
+<div class="aurora" aria-hidden="true"></div>
+
 <header class="site-header">
   <div class="header-inner">
     <div class="brand">
@@ -87,25 +89,71 @@
   <section id="common-view" class="hidden">
     <nav class="view-nav" id="common-nav">
       <button type="button" class="nav-btn active" data-view="dashboard">Tableau de bord</button>
+      <button type="button" class="nav-btn" data-view="assistant">Assistant produits</button>
       <button type="button" class="nav-btn" data-view="stock">Gestion du stock</button>
     </nav>
 
     <div id="common-page-dashboard" class="view-page">
       <div class="dashboard-grid">
-        <div class="stat-card">
+        <div class="stat-card" style="--i:0">
           <span class="stat-value" id="stat-common-skus">—</span>
           <span class="stat-label">Références en stock</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" style="--i:1">
           <span class="stat-value" id="stat-common-units">—</span>
           <span class="stat-label">Unités totales</span>
         </div>
-        <div class="stat-card" data-tone="warn">
+        <div class="stat-card" data-tone="warn" style="--i:2">
           <span class="stat-value" id="stat-common-low">—</span>
           <span class="stat-label">Stock faible</span>
         </div>
       </div>
-      <button type="button" id="go-to-stock-btn">Gestion du stock →</button>
+
+      <div class="assistant-spotlight">
+        <span class="ai-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2l2.2 6.2L20 10l-5.8 1.8L12 18l-2.2-6.2L4 10l5.8-1.8L12 2Z"/>
+          </svg>
+          Assistant IA local
+        </span>
+        <p>Une question sur le catalogue ou la disponibilité en stock ? Demandez en langage naturel — gratuit, illimité.</p>
+        <button type="button" id="go-to-assistant-btn">Poser une question →</button>
+      </div>
+
+      <button type="button" id="go-to-stock-btn" class="secondary">Gestion du stock →</button>
+    </div>
+
+    <div id="common-page-assistant" class="view-page hidden">
+      <div class="panel">
+        <h2>Assistant produits</h2>
+        <p class="hint">
+          Posez une question en langage naturel sur le catalogue ou la
+          disponibilité en stock — le même assistant que celui de la page
+          publique (Service IA), pas de connexion supplémentaire requise.
+        </p>
+
+        <div id="assistant-thread" class="chat-thread" aria-live="polite"></div>
+
+        <form id="assistant-form">
+          <label for="assistant-question">Votre question</label>
+          <div class="input-row">
+            <input
+              type="text"
+              id="assistant-question"
+              placeholder="Ex : quelles branches ont du stock du produit HB-LAP-1001 ?"
+              autocomplete="off"
+              maxlength="500"
+              required
+            >
+            <span id="assistant-question-count" class="char-count">0/500</span>
+            <button type="submit" id="assistant-submit-btn">Envoyer</button>
+          </div>
+          <p class="hint">
+            Une réponse peut prendre 1 à 3 minutes (modèle local, voir
+            <code>ai_service/README.md</code>) — vous pouvez annuler à tout moment.
+          </p>
+        </form>
+      </div>
     </div>
 
     <div id="common-page-stock" class="view-page hidden">
@@ -116,12 +164,17 @@
           (nom, description, prix) ; seule la quantité est stockée ici, pour
           votre branche uniquement.
         </p>
-        <label class="catalog-search-label" for="stock-catalog-search">
-          Rechercher un produit
-          <input type="search" id="stock-catalog-search" placeholder="Nom ou SKU… (ex. HB-LAP-1001)">
-        </label>
-        <div id="stock-catalog-grid" class="catalog-grid"></div>
-        <p id="stock-catalog-empty" class="hidden status">Aucun produit ne correspond à cette recherche.</p>
+
+        <div class="search-row">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="search" id="stock-search" placeholder="Rechercher un produit (nom ou référence)…" autocomplete="off" aria-label="Rechercher un produit">
+        </div>
+
+        <p id="stock-empty" class="hidden status">Aucun produit ne correspond à cette recherche.</p>
+        <div id="stock-grid" class="stock-grid" aria-live="polite"></div>
       </div>
     </div>
   </section>
@@ -134,11 +187,11 @@
 
     <div id="admin-page-dashboard" class="view-page">
       <div class="dashboard-grid">
-        <div class="stat-card">
+        <div class="stat-card" style="--i:0">
           <span class="stat-value" id="stat-admin-users">—</span>
           <span class="stat-label">Utilisateurs actifs</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" style="--i:1">
           <span class="stat-value" id="stat-admin-branches">—</span>
           <span class="stat-label">Branches</span>
         </div>
