@@ -11,9 +11,10 @@
 | `README.md` | Point d'entrée du dépôt : état du projet, lancement (Docker et sans Docker), variables d'environnement, routes de l'API. |
 | `CLAUDE.md` | Guide destiné à un assistant IA (Claude Code) travaillant sur ce dépôt : architecture, conventions, rôle de chaque module. |
 | `LANCEMENT.md` | Aide-mémoire personnel pour lancer tous les services (gitignored, pas dans le dépôt partagé). |
+| `launch_all.sh` | Lance les 5 services sans Docker (ordre + health-checks), pour quand Docker n'est pas disponible. Voir README.md "Option A bis". |
 | `INDEX.md` | Ce fichier. |
 | `docker-compose.yml` | Lance l'API Produit externe et le Backoffice ensemble (services `external-products-api` + `backoffice`, volume `backoffice_data` pour la persistance SQLite). |
-| `.gitignore` | Exclut `.venv/`, `__pycache__/`, `*.pyc`, `*.db`, `.env`, `LANCEMENT.md`. |
+| `.gitignore` | Exclut `.venv/`, `__pycache__/`, `*.pyc`, `*.db`, `.env`, `LANCEMENT.md`, `run-logs/`. |
 
 ## `docs/` — documentation du projet
 
@@ -23,6 +24,11 @@
 | `database_design.md` | Task 1 : schéma relationnel (`Branch`, `User`, `Stock`), diagramme ER, règles de validation du stock et où elles sont appliquées. |
 | `authentication_and_authorization.md` | Task 2 : authentification par session (cookie signé), hachage Argon2id des mots de passe, application des rôles admin/commun côté backend. |
 | `backoffice_ui.md` | Task 3 : approche REST + HTML/CSS/JS léger pour l'interface, intégration de l'API Produit dans le Backoffice, vérifications effectuées. |
+| `product_mcp_server.md` | Task 4 : définition des 5 outils MCP, communication avec l'API Produit, gestion d'erreurs, preuve de tests manuels. |
+| `ai_query_service.md` | Task 5 : types de questions supportés, connexion agent↔MCP et observabilité, stratégie d'accès au stock, réponses fondées, point d'accès REST. |
+| `client_web_interface.md` | Task 6 : interface de base, connexion au Service IA, validation de l'expérience utilisateur. |
+| `integration_testing.md` | Task 7 : vérification du flux complet, scénarios critiques testés, pointeurs README/présentation. |
+| `demo_script.md` | Task 7.4 : déroulé suggéré pour la présentation finale (~12-15 min), filet de sécurité si ça échoue en direct. |
 
 ## `backoffice/` — API REST + interface web (Flask)
 

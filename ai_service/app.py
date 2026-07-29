@@ -14,12 +14,25 @@ import logging
 import os
 
 from flask import Flask, jsonify, request
+from werkzeug.exceptions import HTTPException
 
 from agent import AgentError, _unwrap, answer_question
 from catalog import CatalogError, get_catalog
 from mcp_client import MCPConnectionError
 
+# INFO-level logs from agent.py ("hbntory.agent") show every tool call the
+# agent makes and its result — see README.md "Observing tool calls". Set at
+# import time (not just in __main__) so it also applies under gunicorn.
+logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
+
+MAX_QUESTION_LENGTH = 500
+
 app = Flask(__name__)
+# /api/ask is public and unauthenticated: cap the request body so a large
+# payload can't tie up an LLM call for free (the question length check
+# below is the main guard; this is a blunter backstop against oversized
+# bodies before Flask even parses JSON).
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024
 
 
 @app.after_request
@@ -28,6 +41,14 @@ def _add_cors_headers(response):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
+
+
+@app.errorhandler(HTTPException)
+def _handle_http_exception(e):
+    # Preserve Flask/Werkzeug's own status code (e.g. 413 Payload Too
+    # Large from MAX_CONTENT_LENGTH) instead of flattening it to a generic
+    # 500 via the catch-all below.
+    return jsonify(error="request_error", message=e.description), e.code
 
 
 @app.errorhandler(Exception)
@@ -65,6 +86,11 @@ def ask():
     question = (data.get("question") or "").strip()
     if not question:
         return jsonify(error="bad_request", message="question is required"), 400
+    if len(question) > MAX_QUESTION_LENGTH:
+        return jsonify(
+            error="bad_request",
+            message=f"question must be at most {MAX_QUESTION_LENGTH} characters",
+        ), 400
 
     try:
         answer = asyncio.run(answer_question(question))
@@ -75,9 +101,5 @@ def ask():
 
 
 if __name__ == "__main__":
-    # INFO-level logs from agent.py ("hbntory.agent") show every tool call
-    # the agent makes and its result — see ai_service/README.md "Observing
-    # tool calls" for how to use this while debugging.
-    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
     port = int(os.getenv("AI_SERVICE_PORT", "5002"))
     app.run(host="0.0.0.0", port=port)

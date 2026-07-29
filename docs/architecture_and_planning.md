@@ -20,6 +20,21 @@ Le système HBntory est composé de six services indépendants :
 5. **Service IA (AI Query Service)** — backend contenant l'agent IA.
 6. **Interface client web** — page publique pour les utilisateurs anonymes.
 
+### Diagramme des services
+
+```mermaid
+graph LR
+    client[Interface client web] -->|REST : POST /api/ask, GET /api/catalog| ai[Service IA]
+    ai -->|MCP, stdio| mcp[Serveur MCP Produit]
+    mcp -->|HTTP, lecture seule| papi[API Produit externe]
+    mcp -->|SQLite mode=ro, lecture seule| db[(Base de données relationnelle)]
+    back[Backoffice] -->|SQLAlchemy, lecture/écriture| db
+    back -->|HTTP, lecture seule| papi
+```
+
+Le serveur MCP Produit est le seul point d'accès de l'agent IA aux données produit et
+stock ; le Backoffice reste la seule voie d'écriture sur la base de données.
+
 ## 1.2 Responsabilité de chaque service
 
 | Service | Responsabilité |
@@ -27,7 +42,7 @@ Le système HBntory est composé de six services indépendants :
 | **Backoffice** | Gérer les utilisateurs (admin) et le stock des branches (utilisateurs communs). Applique l'authentification et les rôles côté backend. |
 | **Base de données relationnelle** | Persister les utilisateurs, les branches et les quantités de stock. Ne stocke aucune donnée descriptive de produit. |
 | **API Produit externe** | Fournir les informations produit (nom, description, prix, catégorie, marque, fournisseur, tags). Lecture seule, non modifiable par notre système. |
-| **Serveur MCP Produit** | Exposer à l'agent IA des outils (lister les produits, obtenir le détail d'un produit) qui interrogent l'API Produit. Il ne touche pas à la base de données. |
+| **Serveur MCP Produit** | Exposer à l'agent IA des outils (lister les produits, obtenir le détail d'un produit) qui interrogent l'API Produit, ainsi que des outils de stock en lecture seule sur la base de données (voir §1.6) — jamais d'écriture. |
 | **Service IA** | Recevoir les questions en langage naturel, les transmettre à l'agent, et renvoyer une réponse. Indépendant du backoffice. |
 | **Interface client web** | Permettre à un utilisateur anonyme de poser une question et d'afficher la réponse. |
 
@@ -36,11 +51,13 @@ Le système HBntory est composé de six services indépendants :
 - Le **backoffice** lit et écrit directement dans la **base de données relationnelle**,
   après authentification et vérification du rôle.
 - L'**interface client web** envoie chaque question au **service IA**.
-- Le **service IA** transmet la question à l'agent, qui :
-  - appelle le **serveur MCP Produit** (protocole MCP) pour toute information produit ;
-  - lit la **base de données** pour les quantités de stock par branche.
-- Le **serveur MCP Produit** appelle l'**API Produit externe** en HTTP (lecture seule)
-  et ne communique jamais avec la base de données.
+- Le **service IA** transmet la question à l'agent, qui appelle le **serveur MCP Produit**
+  (protocole MCP, en client MCP standard) pour toute information produit *et* pour les
+  quantités de stock par branche — l'agent ne lit jamais la base de données directement
+  (voir §1.6).
+- Le **serveur MCP Produit** appelle l'**API Produit externe** en HTTP (lecture seule) pour
+  les données produit, et lit la **base de données** en lecture seule (connexion SQLite
+  `mode=ro`, jamais d'écriture) pour les quantités de stock.
 - Si les outils disponibles ne fournissent pas assez d'information, l'agent indique
   explicitement que l'information est indisponible, au lieu de l'inventer.
 
@@ -107,6 +124,21 @@ stock du produit X ? » ou « quels produits sont disponibles dans la branche Y 
 - **Compromis principal :** pas de streaming de la réponse token par token ni
   d'expérience « chat en temps réel ». Une réponse longue de l'agent arrive d'un seul
   bloc, après un temps d'attente.
+
+**Addendum — catalogue réservé aux comptes Backoffice :** l'assistant reste
+accessible anonymement (exigence du sujet, non négociable). Le catalogue
+(fonctionnalité bonus, hors périmètre obligatoire) est en revanche réservé
+aux comptes Backoffice existants : `client_web` appelle `POST /api/login`
+puis `GET /api/me` du Backoffice en cross-origin, avec `credentials:
+"include"`, pour vérifier une vraie session plutôt qu'un simple lien. Ceci
+fonctionne sans HTTPS car `127.0.0.1`/`localhost` sur des ports différents
+sont considérés « same-site » (le calcul same-site ignore le port), donc le
+cookie de session `SameSite=Lax` du Backoffice est bien envoyé sur ces
+requêtes cross-origin — seul du CORS explicite (`Access-Control-Allow-
+Origin` réfléchi vers l'origine de `client_web`, `Access-Control-Allow-
+Credentials: true`) était nécessaire côté Backoffice, restreint aux trois
+routes d'authentification (`/api/login`, `/api/logout`, `/api/me`), jamais
+au reste de l'API (stock, utilisateurs).
 
 ## 2.3 Service IA ↔ outils MCP — client MCP standard
 

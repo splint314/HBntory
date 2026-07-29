@@ -38,16 +38,29 @@ lui-même, à `http://localhost:5000/`. Voir
 
 ## 2. Opérations de stock (utilisateur commun)
 
-Implémentées dans `static/app.js` (`loadStock`, `submitStockChange`,
-formulaire `#check-form`), branchées sur les routes REST déjà existantes
-(Task 2) :
+La page « Gestion du stock » est un **catalogue en grille de cartes produit**
+(`static/app.js` : `loadStockCatalog`, `renderCatalogGrid`,
+`submitCardStockChange`), plutôt qu'un tableau séparé d'un formulaire
+d'ajout/retrait. Chaque carte affiche nom, SKU, catégorie/prix, un badge de
+quantité (la quantité actuelle dans la branche de l'utilisateur, 0 si
+absente), un champ quantité et deux boutons *Ajouter*/*Retirer* — l'ajout,
+le retrait et la consultation de la quantité se font donc au même endroit,
+directement sur le produit concerné :
 
 | Action du sujet | UI | Route appelée |
 |---|---|---|
-| Ajouter du stock | Formulaire « Ajouter / retirer du stock », bouton *Ajouter* | `POST /api/stock/add` |
-| Retirer du stock | Même formulaire, bouton *Retirer* | `POST /api/stock/remove` |
-| Lister le stock de sa branche | Tableau affiché au chargement de la page | `GET /api/stock` |
-| Vérifier la quantité d'un produit | Formulaire « Vérifier la quantité d'un produit » | `GET /api/stock/<sku>` |
+| Ajouter du stock | Bouton *Ajouter* de la carte produit | `POST /api/stock/add` |
+| Retirer du stock | Bouton *Retirer* de la carte produit | `POST /api/stock/remove` |
+| Lister le stock de sa branche | Badge de quantité sur chaque carte, au chargement | `GET /api/stock` |
+| Vérifier la quantité d'un produit | Le badge de la carte fait office de consultation permanente (pas besoin d'un formulaire séparé) | `GET /api/stock` |
+
+Une barre de recherche filtre les cartes déjà chargées par nom ou SKU,
+côté client uniquement (pas de nouvel appel réseau à chaque frappe). Au
+succès d'un ajout/retrait, le badge de quantité de la carte est mis à jour
+avec la valeur renvoyée par l'API (`result.quantity`), sans recharger tout
+le catalogue ; en cas d'erreur (ex. retrait sous 0), le message d'erreur
+s'affiche sur la carte concernée (`aria-live="polite"`), sans casser le
+reste de la grille.
 
 **Clarté de la branche opérée** : un bandeau (`#branch-banner`, en haut de
 la vue utilisateur commun) affiche en permanence « Branche : <nom> »,
@@ -106,14 +119,15 @@ HTTP déjà présente dans `validation.py` pour éviter la duplication — voir
 en cache ni écrit dans la base locale** : à chaque chargement de la vue
 utilisateur commun, le catalogue est refetché depuis l'API.
 
-Choix retenu : un **sélecteur de produit** (`<select>` peuplé par
-`GET /api/products?limit=100`, affichant `SKU — Nom`) pour le formulaire
-d'ajout/retrait de stock, et une **résolution du nom** pour chaque ligne du
-tableau de stock (`productName(sku)`, qui cherche dans le même catalogue
-déjà chargé plutôt que de refaire un appel par ligne). Ce choix a été
-préféré à une recherche par identifiant en texte libre : il évite les
-fautes de frappe sur le SKU et rend explicite, avant l'action, à quel
-produit correspond l'identifiant technique.
+Choix retenu : une **grille de cartes produit** (une carte par produit du
+catalogue, `GET /api/products?limit=100`), chaque carte portant directement
+ses propres contrôles d'ajout/retrait et son badge de quantité (fusion
+côté client avec `GET /api/stock`, `stockBySku`). Ce choix a été préféré à
+un sélecteur `<select>` séparé du tableau de stock (version précédente) :
+plus besoin de faire correspondre mentalement une ligne de tableau à une
+option de liste déroulante — le nom, le SKU et la quantité sont visibles
+au même endroit que les boutons d'action, ce qui rend explicite, avant
+l'action, à quel produit correspond l'identifiant technique.
 
 Ces routes exigent une session valide (`@login_required`) mais aucun rôle
 précis : consulter le catalogue n'est pas une opération sensible, à la

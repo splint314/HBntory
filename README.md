@@ -22,7 +22,7 @@ communication, MVP) :
 | `product_api/` | Catalogue fournisseur externe, vendored, lecture seule, non modifié | fourni |
 | `product_mcp/` | Serveur MCP : outils produit (catalogue) + stock (lecture seule de la DB Backoffice) pour l'agent IA | Task 4-5, fait |
 | `ai_service/` | Service IA : reçoit une question, l'agent (LLM local via Ollama, tool-use) appelle le serveur MCP, renvoie une réponse | Task 5, fait |
-| `client_web/` | Page publique statique, sans authentification, qui pose des questions au Service IA | Task 6, fait |
+| `client_web/` | Page publique statique : assistant en langage naturel sans authentification (Service IA) + catalogue réservé aux comptes Backoffice (login cross-origin) | Task 6, fait |
 | Base de données relationnelle | SQLite (fichier partagé, lu en écriture par le Backoffice et en lecture seule par `product_mcp`) | fait |
 
 Task 7 (vérification finale, tests critiques, conteneurisation complète,
@@ -35,6 +35,7 @@ voir les sections [Tests](#tests-task-7) et
 ```
 client_web  --REST-->  ai_service  --MCP (stdio)-->  product_mcp  --HTTP-->  product_api
                                                             \--SQLite (mode=ro)--> hbntory.db
+client_web  --REST (auth only, cross-origin)-->  backoffice
 backoffice  <--SQLAlchemy-->  hbntory.db
 backoffice  --HTTP-->  product_api
 ```
@@ -48,15 +49,27 @@ backoffice  --HTTP-->  product_api
   `mode=ro`) et n'a aucune notion d'authentification (il ne fait que lire).
 - Le **Service IA** ne connaît ni la base de données ni l'API Produit
   directement : tout passe par le serveur MCP, en client MCP standard.
-- L'**interface cliente** est anonyme et ne parle qu'au Service IA, jamais
-  directement au Backoffice ni à la base.
+- L'**interface cliente** reste anonyme pour l'assistant (exigence du
+  sujet) et ne parle qu'au Service IA pour les questions. Le catalogue
+  (bonus, hors périmètre obligatoire) est réservé aux comptes Backoffice :
+  `client_web` appelle directement `/api/login`, `/api/me`, `/api/logout`
+  du Backoffice en cross-origin (CORS restreint à ces trois routes, voir
+  [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
+  §2.2) — jamais la base de données directement.
 
-Détails par service : [docs/database_design.md](docs/database_design.md),
-[docs/authentication_and_authorization.md](docs/authentication_and_authorization.md),
-[docs/backoffice_ui.md](docs/backoffice_ui.md),
-[product_mcp/README.md](product_mcp/README.md),
+Détails par service (un document par task) :
+[docs/database_design.md](docs/database_design.md) (Task 1),
+[docs/authentication_and_authorization.md](docs/authentication_and_authorization.md) (Task 2),
+[docs/backoffice_ui.md](docs/backoffice_ui.md) (Task 3),
+[docs/product_mcp_server.md](docs/product_mcp_server.md) (Task 4),
+[docs/ai_query_service.md](docs/ai_query_service.md) (Task 5),
+[docs/client_web_interface.md](docs/client_web_interface.md) (Task 6),
+[docs/integration_testing.md](docs/integration_testing.md) (Task 7) —
+chacun renvoie vers le README technique du service concerné
+([product_mcp/README.md](product_mcp/README.md),
 [ai_service/README.md](ai_service/README.md),
-[client_web/README.md](client_web/README.md).
+[client_web/README.md](client_web/README.md)) pour le détail complet et
+les logs de test.
 
 ## Installation et lancement
 
@@ -67,17 +80,14 @@ Détail complet ci-dessous ; dépannage rapide dans
 
 ```bash
 docker compose up --build
-
-# Une fois démarré, récupérer le modèle local (une seule fois, persisté
-# dans le volume ollama_data — pas besoin de le refaire au prochain lancement) :
-docker compose exec ollama ollama pull llama3.1:8b
 ```
 
-Démarre, dans l'ordre des dépendances : l'API Produit externe
-(`http://localhost:5001`), le Backoffice (`http://localhost:5000`, admin
-déjà seedé `admin` / `ChangeMe123!`, à changer via `ADMIN_PASSWORD` dans
-`docker-compose.yml`), **Ollama** (`http://localhost:11434`, le LLM local
-qui sert l'agent — voir §2.4 de
+Démarre, dans l'ordre des dépendances (`depends_on` + `healthcheck`, chaque
+service attend que le précédent soit réellement prêt, pas juste démarré) :
+l'API Produit externe (`http://localhost:5001`), le Backoffice
+(`http://localhost:5000`, admin déjà seedé `admin` / `ChangeMe123!`, à
+changer via `ADMIN_PASSWORD` dans `docker-compose.yml`), **Ollama**
+(`http://localhost:11434`, le LLM local qui sert l'agent — voir §2.4 de
 [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
 pour la justification de ce choix plutôt qu'une API payante), le Service
 IA (`http://localhost:5002`) et l'interface cliente
@@ -86,9 +96,35 @@ le volume nommé `backoffice_data`, monté en lecture seule dans le
 conteneur `ai-service` pour les outils de stock du serveur MCP (celui-ci
 n'a pas de conteneur propre : il n'a pas de port HTTP, il est lancé comme
 sous-processus par `ai_service`, voir
-[product_mcp/README.md](product_mcp/README.md)). Tant que le modèle n'est
-pas récupéré via `ollama pull`, `/api/ask` répond 503 au lieu de donner
-une vraie réponse — tout le reste fonctionne sans attendre.
+[product_mcp/README.md](product_mcp/README.md)).
+
+`ai-service` télécharge automatiquement le modèle (`ensure_model.py`, au
+démarrage du conteneur) s'il n'est pas déjà présent dans le volume
+`ollama_data` — aucune étape manuelle requise, mais le tout premier
+démarrage peut prendre plusieurs minutes le temps du téléchargement
+(~4.7 Go pour `llama3.1:8b`) ; le healthcheck d'`ai-service` tolère ce délai
+(`start_period: 600s`) avant de considérer le conteneur en échec.
+
+### Option A bis — `launch_all.sh` (sans Docker)
+
+Si Docker n'est pas disponible (ex. WSL sans intégration Docker Desktop),
+[launch_all.sh](launch_all.sh) automatise l'Option B ci-dessous : il lance
+les 5 services dans l'ordre, attend que chacun réponde avant de lancer le
+suivant (pas de `sleep` à l'aveugle), démarre Ollama et vérifie/télécharge
+le modèle si besoin, et seed la base une seule fois si elle n'existe pas
+encore.
+
+Prérequis : les `.venv` de `backoffice/`, `product_mcp/` et `ai_service/`
+déjà créés (voir Option B, étapes 2-4, section installation des
+dépendances uniquement) et [Ollama](https://ollama.com/download) installé.
+
+```bash
+./launch_all.sh          # lance tout, affiche les URLs, Ctrl+C arrête tout
+./launch_all.sh stop     # arrête tout depuis un autre terminal
+```
+
+Logs par service dans `run-logs/` (ignoré par git), PIDs suivis dans
+`run-logs/pids` pour un arrêt propre même après un crash.
 
 ### Option B — Chaque service manuellement
 
@@ -143,6 +179,8 @@ table des routes ci-dessous.
 | `ADMIN_PASSWORD` | Mot de passe en clair de l'admin, utilisé une seule fois par `seed.py` | *(obligatoire, aucun défaut)* |
 | `SECRET_KEY` | Clé de signature des cookies de session Flask | valeur aléatoire (dev uniquement) |
 | `PRODUCT_API_URL` | URL de l'API Produit externe | `http://localhost:5001` |
+| `FLASK_DEBUG` | Active le débogueur interactif Werkzeug si mis à `1` (**ne jamais l'activer en production** : exécution de code arbitraire si le débogueur est atteignable) | désactivé |
+| `PORT` | Port d'écoute (usage local via `python app.py`, ignoré par `gunicorn` en conteneur) | `5000` |
 
 #### Principales routes de l'API Backoffice
 
@@ -221,6 +259,9 @@ Aucune authentification requise. Questions d'exemple documentées :
 
 ## Tests (Task 7)
 
+Vue d'ensemble de l'intégration et du plan de test :
+[docs/integration_testing.md](docs/integration_testing.md).
+
 - `backoffice/tests/` — suite automatisée `pytest` (auth, autorisation par
   rôle, règles de stock — voir la liste des scénarios ci-dessous) :
 
@@ -281,8 +322,10 @@ Aucune authentification requise. Questions d'exemple documentées :
 ## Problèmes courants
 
 - **`/api/ask` répond 503 "agent_unavailable"** : Ollama n'a pas encore le
-  modèle — `ollama pull llama3.1:8b` (ou `docker compose exec ollama ollama
-  pull llama3.1:8b` en Docker), voir §2.4 de
+  modèle — `ollama pull llama3.1:8b` en lancement manuel (Option B). En
+  Docker (Option A), `ai-service` le télécharge automatiquement au premier
+  démarrage (`ensure_model.py`) ; si ça persiste après plusieurs minutes,
+  vérifier `docker compose logs ai-service`. Voir §2.4 de
   [docs/architecture_and_planning.md](docs/architecture_and_planning.md).
 - **"invalid credentials" dans l'UI du Backoffice alors que l'API répond
   OK en `curl`** : autofill du navigateur avec un mauvais mot de passe —
@@ -348,8 +391,27 @@ Déroulé suggéré pour la soutenance, avec les données seedées :
 
 ## Fonctionnalités optionnelles implémentées
 
-Aucune des fonctionnalités listées comme optionnelles dans le sujet
-(streaming WebSocket, historique de conversation, agent multi-étapes,
-tests de bout en bout complets) n'a été implémentée — voir
+Trois des objectifs optionnels listés dans le sujet (Task 9) ont été
+implémentés :
+
+- **Docker Compose pour tous les services** — les 5 services (API Produit,
+  Backoffice, Ollama, Service IA, interface cliente) sont conteneurisés
+  dans [docker-compose.yml](docker-compose.yml), avec healthchecks et
+  ordre de démarrage explicite (`depends_on: condition: service_healthy`).
+- **Suite de tests automatisés** — 20 tests `pytest` couvrant
+  authentification, autorisation par rôle et règles de stock
+  (`backoffice/tests/`, voir [Tests](#tests-task-7) ci-dessus). Limité au
+  Backoffice : `product_mcp/`, `ai_service/` et `client_web/` n'ont que des
+  scripts de test manuels.
+- **Meilleur style d'interface** — thème clair/sombre (`prefers-color-scheme`
+  + bascule manuelle persistée), design monochrome avec accents de marque,
+  panneau catalogue avec filtre par branche, sur le Backoffice et
+  `client_web`.
+
+Le reste des objectifs optionnels (streaming WebSocket, historique de
+conversation, rôle SuperAdmin, journaux d'audit, historique des mouvements
+de stock, documentation OpenAPI pour nos propres services, rate limiting,
+déploiement cloud) n'a pas été implémenté — voir
 [docs/architecture_and_planning.md](docs/architecture_and_planning.md)
-§3.3 pour la liste et la justification du choix de rester sur le MVP.
+§3.3 pour la justification du choix de rester sur le MVP au-delà de ces
+trois ajouts.
