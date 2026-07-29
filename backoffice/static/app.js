@@ -258,8 +258,7 @@ async function render() {
     hide("admin-view");
     show("common-view");
     switchView("common-nav", commonPages, "dashboard");
-    await loadProducts();
-    await loadStock();
+    await loadStockCatalog();
   }
 }
 
@@ -291,7 +290,7 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Common user: stock
+// Common user: product catalog + stock (search, add/remove per card)
 // ---------------------------------------------------------------------------
 
 async function loadProducts() {
