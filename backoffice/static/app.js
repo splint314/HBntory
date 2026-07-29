@@ -258,7 +258,8 @@ async function render() {
     hide("admin-view");
     show("common-view");
     switchView("common-nav", commonPages, "dashboard");
-    await loadStockCatalog();
+    await loadProducts();
+    await loadStock();
   }
 }
 
