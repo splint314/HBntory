@@ -1,0 +1,106 @@
+services:
+  external-products-api:
+    build: ./product_api
+    container_name: hbntory-external-products-api
+    environment:
+      HBN_PRODUCTS_PORT: "5000"
+      HBN_PRODUCTS_LATENCY_MS: "0"
+    ports:
+      - "5001:5000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backoffice:
+    build: ./backoffice
+    container_name: hbntory-backoffice
+    depends_on:
+      external-products-api:
+        condition: service_healthy
+    environment:
+      # Change these for anything beyond local testing.
+      SECRET_KEY: "dev-secret-change-me"
+      ADMIN_PASSWORD: "ChangeMe123!"
+      DATABASE_URL: "sqlite:////data/hbntory.db"
+      # DNS name on the Compose network (see product_api/docs/api_contract.md).
+      PRODUCT_API_URL: "http://external-products-api:5000"
+    volumes:
+      - backoffice_data:/data
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # No API key, no per-token cost (student project, no budget for a paid
+  # LLM API — see docs/architecture_and_planning.md §2.4). The model is
+  # pulled automatically by ai-service's entrypoint (ensure_model.py) on
+  # first start — no manual `ollama pull` step needed anymore.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hbntory-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai_service/Dockerfile
+    container_name: hbntory-ai-service
+    depends_on:
+      external-products-api:
+        condition: service_healthy
+      backoffice:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      # DNS name on the Compose network — the ollama service above.
+      OLLAMA_HOST: "http://ollama:11434"
+      AI_MODEL: "llama3.1:8b"
+      PRODUCT_API_URL: "http://external-products-api:5000"
+      # Same SQLite file as the Backoffice, mounted read-only below: the
+      # MCP stock tools open it with mode=ro regardless, this is
+      # defense-in-depth at the container level too.
+      DATABASE_URL: "sqlite:////data/hbntory.db"
+    volumes:
+      - backoffice_data:/data:ro
+    ports:
+      - "5002:5002"
+    restart: unless-stopped
+    # start_period: the entrypoint blocks on ensure_model.py, which can
+    # take several minutes to pull an 8B model on first run.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5002/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 600s
+
+  client-web:
+    build: ./client_web
+    container_name: hbntory-client-web
+    depends_on:
+      ai-service:
+        condition: service_healthy
+    ports:
+      - "5173:5173"
+    restart: unless-stopped
+
+volumes:
+  backoffice_data:
+  ollama_data:

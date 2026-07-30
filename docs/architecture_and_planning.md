@@ -20,6 +20,21 @@ Le système HBntory est composé de six services indépendants :
 5. **Service IA (AI Query Service)** — backend contenant l'agent IA.
 6. **Interface client web** — page publique pour les utilisateurs anonymes.
 
+### Diagramme des services
+
+```mermaid
+graph LR
+    client[Interface client web] -->|REST : POST /api/ask, GET /api/catalog| ai[Service IA]
+    ai -->|MCP, stdio| mcp[Serveur MCP Produit]
+    mcp -->|HTTP, lecture seule| papi[API Produit externe]
+    mcp -->|SQLite mode=ro, lecture seule| db[(Base de données relationnelle)]
+    back[Backoffice] -->|SQLAlchemy, lecture/écriture| db
+    back -->|HTTP, lecture seule| papi
+```
+
+Le serveur MCP Produit est le seul point d'accès de l'agent IA aux données produit et
+stock ; le Backoffice reste la seule voie d'écriture sur la base de données.
+
 ## 1.2 Responsabilité de chaque service
 
 | Service | Responsabilité |
@@ -27,7 +42,7 @@ Le système HBntory est composé de six services indépendants :
 | **Backoffice** | Gérer les utilisateurs (admin) et le stock des branches (utilisateurs communs). Applique l'authentification et les rôles côté backend. |
 | **Base de données relationnelle** | Persister les utilisateurs, les branches et les quantités de stock. Ne stocke aucune donnée descriptive de produit. |
 | **API Produit externe** | Fournir les informations produit (nom, description, prix, catégorie, marque, fournisseur, tags). Lecture seule, non modifiable par notre système. |
-| **Serveur MCP Produit** | Exposer à l'agent IA des outils (lister les produits, obtenir le détail d'un produit) qui interrogent l'API Produit. Il ne touche pas à la base de données. |
+| **Serveur MCP Produit** | Exposer à l'agent IA des outils (lister les produits, obtenir le détail d'un produit) qui interrogent l'API Produit, ainsi que des outils de stock en lecture seule sur la base de données (voir §1.6) — jamais d'écriture. |
 | **Service IA** | Recevoir les questions en langage naturel, les transmettre à l'agent, et renvoyer une réponse. Indépendant du backoffice. |
 | **Interface client web** | Permettre à un utilisateur anonyme de poser une question et d'afficher la réponse. |
 
@@ -36,11 +51,13 @@ Le système HBntory est composé de six services indépendants :
 - Le **backoffice** lit et écrit directement dans la **base de données relationnelle**,
   après authentification et vérification du rôle.
 - L'**interface client web** envoie chaque question au **service IA**.
-- Le **service IA** transmet la question à l'agent, qui :
-  - appelle le **serveur MCP Produit** (protocole MCP) pour toute information produit ;
-  - lit la **base de données** pour les quantités de stock par branche.
-- Le **serveur MCP Produit** appelle l'**API Produit externe** en HTTP (lecture seule)
-  et ne communique jamais avec la base de données.
+- Le **service IA** transmet la question à l'agent, qui appelle le **serveur MCP Produit**
+  (protocole MCP, en client MCP standard) pour toute information produit *et* pour les
+  quantités de stock par branche — l'agent ne lit jamais la base de données directement
+  (voir §1.6).
+- Le **serveur MCP Produit** appelle l'**API Produit externe** en HTTP (lecture seule) pour
+  les données produit, et lit la **base de données** en lecture seule (connexion SQLite
+  `mode=ro`, jamais d'écriture) pour les quantités de stock.
 - Si les outils disponibles ne fournissent pas assez d'information, l'agent indique
   explicitement que l'information est indisponible, au lieu de l'inventer.
 
@@ -108,6 +125,21 @@ stock du produit X ? » ou « quels produits sont disponibles dans la branche Y 
   d'expérience « chat en temps réel ». Une réponse longue de l'agent arrive d'un seul
   bloc, après un temps d'attente.
 
+**Addendum — catalogue réservé aux comptes Backoffice :** l'assistant reste
+accessible anonymement (exigence du sujet, non négociable). Le catalogue
+(fonctionnalité bonus, hors périmètre obligatoire) est en revanche réservé
+aux comptes Backoffice existants : `client_web` appelle `POST /api/login`
+puis `GET /api/me` du Backoffice en cross-origin, avec `credentials:
+"include"`, pour vérifier une vraie session plutôt qu'un simple lien. Ceci
+fonctionne sans HTTPS car `127.0.0.1`/`localhost` sur des ports différents
+sont considérés « same-site » (le calcul same-site ignore le port), donc le
+cookie de session `SameSite=Lax` du Backoffice est bien envoyé sur ces
+requêtes cross-origin — seul du CORS explicite (`Access-Control-Allow-
+Origin` réfléchi vers l'origine de `client_web`, `Access-Control-Allow-
+Credentials: true`) était nécessaire côté Backoffice, restreint aux trois
+routes d'authentification (`/api/login`, `/api/logout`, `/api/me`), jamais
+au reste de l'API (stock, utilisateurs).
+
 ## 2.3 Service IA ↔ outils MCP — client MCP standard
 
 - **Option retenue :** le service IA embarque l'agent, qui se connecte au serveur MCP
@@ -120,13 +152,53 @@ stock du produit X ? » ou « quels produits sont disponibles dans la branche Y 
   externe ou base de données), qui ajoute un peu de latence et un point de défaillance de
   plus à surveiller.
 
-## 2.4 Justification globale
+## 2.4 Modèle LLM de l'agent — Ollama local plutôt qu'une API payante
+
+- **Option retenue :** l'agent appelle un modèle exécuté localement via
+  [Ollama](https://ollama.com) (`llama3.1:8b` par défaut, capable de tool-calling), plutôt
+  qu'une API LLM payante (Claude, GPT, etc.). `AI_MODEL=llama3.2` (3B) reste disponible comme
+  alternative plus rapide mais moins fiable — voir plus bas pourquoi ce n'est pas le choix par
+  défaut.
+- **Bénéfice principal :** coût nul. C'est un projet étudiant sans budget récurrent — Ollama
+  tourne en local (ou dans son propre conteneur via `docker-compose.yml`), sans clé API ni
+  facturation à l'usage.
+- **Compromis accepté :** un modèle local suit les instructions (rester dans les 4 types de
+  questions supportés, ne jamais inventer de donnée, choisir le bon outil) de façon moins
+  fiable qu'un modèle frontière payant. Ce compromis est jugé acceptable pour un projet de
+  démonstration : le mécanisme de *grounding* (l'agent ne peut répondre qu'avec ce que les
+  outils MCP lui renvoient) reste identique quel que soit le modèle qui l'applique — voir
+  §1.3 et §1.6. L'inférence CPU locale est aussi plus lente qu'une API hébergée — observé
+  entre quelques secondes et plusieurs minutes par question selon la machine, même modèle
+  déjà chargé en mémoire. Acceptable pour une démonstration (l'interface cliente affiche un
+  indicateur de chargement pendant l'attente), mais pas pour un usage en production à fort
+  trafic.
+- **Deux défaillances concrètes observées** (détail et logs dans
+  [ai_service/README.md](../ai_service/README.md)), qui ont motivé le choix du modèle par
+  défaut plutôt que de rester purement théorique sur le compromis :
+  1. Avec `llama3.2` (3B) : pour « quels produits sont disponibles dans la branche Lyon ? »,
+     l'agent a appelé `list_products_tool` (tout le catalogue, sans filtre de branche) au lieu
+     de `get_stock_by_branch_tool`, puis présenté le catalogue entier comme le stock de cette
+     branche — une vraie erreur de *grounding* (donnée réelle, mais mauvais outil). Un
+     correctif (descriptions d'outils plus explicites dans `product_mcp/server.py`) a corrigé
+     le cas testé, mais pas de façon garantie : un nouveau test sur une autre branche a encore
+     échoué différemment.
+  2. Avec `llama3.1:8b` : le choix d'outil est resté correct dans tous nos essais, mais une
+     question de type liste de courses multi-produits a révélé une erreur de comparaison de
+     quantités (le modèle a lu la bonne donnée — 5 unités disponibles pour 10 demandées — mais
+     a conclu à tort que la branche pouvait tout fournir).
+  Aucun des deux modèles n'élimine complètement le risque d'erreur ; `llama3.1:8b` a été
+  retenu par défaut car nettement plus fiable sur le choix d'outil (le problème le plus
+  visible et le plus proche d'une invention de donnée), au prix d'un téléchargement plus
+  lourd et d'une latence un peu plus élevée sur du matériel modeste.
+
+## 2.5 Justification globale
 
 Ces choix privilégient la **simplicité et l'adéquation au besoin** plutôt que la
 complexité. Le sujet indique explicitement qu'il ne s'agit pas de choisir l'option la plus
 complexe, mais celle qui convient aux exigences du projet et à la capacité de l'équipe.
-REST pour le backoffice et le client couvre tous les besoins obligatoires, tandis que le
-protocole MCP standard assure un couplage faible entre l'agent et ses sources de données.
+REST pour le backoffice et le client couvre tous les besoins obligatoires, le protocole MCP
+standard assure un couplage faible entre l'agent et ses sources de données, et un LLM local
+gratuit couvre le besoin sans engager de coût récurrent pour l'équipe.
 
 ---
 
