@@ -53,9 +53,13 @@ Sur `http://localhost:5000/`, login `admin` / `ChangeMe123!`.
 
 Se déconnecter, login `alice`.
 
-1. Lister le stock de sa branche (Lyon) : `HB-LAP-1001` (10), `HB-MON-2101`
-   (5), `HB-KBD-4102` (25), `HB-SSD-7101` (15).
-2. Ajouter du stock valide (ex. +5 `HB-LAP-1001`).
+1. Montrer le catalogue de sa branche (Lyon) : les 40 produits du
+   catalogue fournisseur y apparaissent, chacun avec sa quantité en stock
+   pour cette branche (`seed.py` répartit désormais tout le catalogue sur
+   les deux branches, et non plus seulement 4 SKU) — barre de recherche
+   pour en retrouver un rapidement.
+2. Ajouter du stock valide directement depuis la carte du produit (ex. +5
+   sur `HB-LAP-1001`) : la quantité affichée se met à jour immédiatement.
 3. Démonstration des refus attendus par le sujet :
    - retirer plus que le stock disponible → `400 Insufficient stock`.
    - quantité négative ou nulle → `400 Quantity must be strictly
@@ -67,10 +71,13 @@ Se déconnecter, login `alice`.
 
 ## 4. Interface cliente IA (3-5 min)
 
-Sur `http://localhost:5173/`, montrer d'abord le **catalogue** (panneau de
-gauche) : chargé instantanément via `GET /api/catalog` (pas de LLM), filtre
-par branche (Lyon/Paris), et cliquer une carte produit préremplit la
-question de l'assistant avec son SKU — bon moyen de meubler l'attente avant
+Sur `http://localhost:5173/`, l'**assistant** est maintenant la section
+principale, tout en haut de la page (badge « Assistant IA local ») ; le
+**catalogue** (chargé via `GET /api/catalog`, sans LLM) est en dessous, avec
+recherche et filtre par branche (Lyon/Paris). Avec les 40 produits du
+catalogue désormais seedés, cet appel prend maintenant une dizaine de
+secondes (pas « instantané ») — cliquer une carte produit préremplit la
+question de l'assistant avec son SKU, bon moyen de meubler l'attente avant
 de lancer la question en direct ci-dessous.
 
 ⚠️ **Latence réelle observée : 1 à 3 minutes par question**, même modèle
@@ -100,8 +107,10 @@ Questions (déjà listées sur la page et dans
    vient de l'API Produit. *(celle à poser en direct)*
 2. « Quelles branches ont du stock du produit HB-KBD-4102 ? » — Lyon
    uniquement.
-3. « Quels produits sont disponibles dans la branche Lyon ? » — les 4 SKU
-   ci-dessus.
+3. « Quels produits sont disponibles dans la branche Lyon ? » — les 40
+   produits du catalogue y sont stockés (voir `seed.py`), donc une réponse
+   complète plutôt qu'une courte liste ; utile pour montrer que l'agent
+   gère bien un grand nombre de résultats.
 4. « As-tu du stock pour un produit qui n'existe pas, XYZ-0000 ? » — la
    réponse doit dire clairement que l'information est indisponible, **sans
    rien inventer**.
