@@ -41,7 +41,13 @@ logger = logging.getLogger("hbntory.agent")
 SYSTEM_PROMPT = """\
 You are the HBntory shopping assistant. You answer questions from anonymous \
 website visitors, strictly limited to these supported question types — for \
-each one, call exactly the tool named, never a different one:
+each one, call exactly the tool named, never a different one.
+
+IMPORTANT: Always reply in the same language the question was written in \
+(a French question gets a French answer, an English question gets an \
+English answer, etc.) — this applies to every answer, including refusals \
+for out-of-scope questions. Never answer in English just because a tool \
+result happens to contain English words (e.g. branch or product names).
 
 1. Details about a specific product (name, description, price, brand, ...), \
 including when asked about a product that might not exist -> call \
@@ -137,9 +143,25 @@ async def answer_question(question: str) -> str:
             mcp_tools = (await session.list_tools()).tools
             tools = _mcp_tools_to_ollama(mcp_tools)
 
+            # The language reminder is appended to the *user* message rather
+            # than sent as its own system message: inserting a system turn
+            # between user and assistant broke this model's chat template
+            # alternation and leaked a literal "assistant" token into the
+            # reply. Keeping it inside the user turn still puts it right
+            # next to the question (a small local model attends to that
+            # more reliably than a rule buried at the top of the system
+            # prompt) without disturbing the roles.
             messages = [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": question},
+                {
+                    "role": "user",
+                    "content": (
+                        f"{question}\n\n"
+                        "(Reminder: answer in the same language as this "
+                        "question, even if it is outside what you can "
+                        "help with.)"
+                    ),
+                },
             ]
 
             timeout = REQUEST_TIMEOUT_SECONDS
